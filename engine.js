@@ -1,5 +1,5 @@
 /* ============================================================
-   MNHR-engine — engine.js Alpha 8.7
+   MNHR-engine — engine.js Alpha 8.7.5
    Auto-detect đa frame + Hệ thống Biến (Events)
    ============================================================ */
 window.MNHR = (function () {
@@ -316,8 +316,9 @@ function MiniRuntime() {
           it._everyTimers[ev.id] -= interval;
           scheduleEventAction(state, it, ev);
         }
-      } else if (ev.trigger === 'onKeyPress') {
-        const k = tp.key, mode = tp.mode || 'press';
+      } else if (ev.trigger === 'onKeyPress' || ev.trigger === 'onUIButton') {
+        const ub = ev.trigger === 'onUIButton' ? (((state.ui && state.ui.buttons) || []).find(b => b.id === tp.button) || null) : null;
+        const k = ev.trigger === 'onUIButton' ? (ub && ub.key) : tp.key, mode = tp.mode || 'press';
         const was = !!it._keyState[ev.id];
         const now = !!(k && state.keys[k]);
         if (mode === 'release') { if (!now && was) scheduleEventAction(state, it, ev); }
@@ -363,6 +364,107 @@ function MiniRuntime() {
       }
     }
   }
+  /* ---------- MỤC TIÊU / TÍN HIỆU GIỮA CÁC NHÂN VẬT ---------- */
+  function findTarget(state, it, t) {
+    if (!t || t === 'self') return it;
+    if (t === '__player') return state.items.find(o => o.kind === 'sprite' && o.control === 'player') || null;
+    return state.items.find(o => o.id === t) || state.items.find(o => o.name === t) || null;
+  }
+  /* Nhóm: group:player = NV (người chơi) · group:bot = Bot · group:npc = NPC đứng yên · group:all = tất cả */
+  function inGroup(o, g) {
+    if (o.kind !== 'sprite') return false;
+    if (g === 'group:all') return true;
+    if (g === 'group:player') return o.control === 'player';
+    if (g === 'group:bot') return o.control === 'bot';
+    if (g === 'group:npc') return o.control === 'none';
+    return false;
+  }
+  function targetList(state, it, t) {
+    if (typeof t === 'string' && t.indexOf('group:') === 0) return state.items.filter(o => inGroup(o, t));
+    const o = findTarget(state, it, t);
+    return o ? [o] : [];
+  }
+  function sendSignal(state, from, name, to) {
+    if (!name) return;
+    for (const o of state.items) {
+      if (o.kind !== 'sprite' || !o.events) continue;
+      if (to && to !== 'all' && targetList(state, from, to).indexOf(o) < 0) continue;
+      for (const ev of o.events) {
+        if (ev.trigger !== 'onSignal') continue;
+        const tp = ev.triggerParams || {};
+        if (tp.name !== name) continue;
+        if (tp.from && tp.from !== 'any' && targetList(state, o, tp.from).indexOf(from) < 0) continue;
+        scheduleEventAction(state, o, ev);
+      }
+    }
+  }
+  /* ---------- NHẠC NỀN ---------- */
+  function createBGM(tracks) {
+    const rs = [];
+    (tracks || []).forEach(t => { if (t && t.url) rs.push({ t, a: null, st: 'idle', wait: 0, time: 0, plays: 0, fo: 0, foMax: 0, blocked: false }); });
+    const base = r => Math.max(0, Math.min(1, r.t.volume != null ? r.t.volume : 0.8));
+    const audioOf = (r) => {
+      if (!r.a) {
+        if (typeof Audio === 'undefined') return null;
+        const a = new Audio(); a.preload = 'auto'; a.src = r.t.url;
+        a.addEventListener('ended', () => {
+          if (r.st !== 'playing') return;
+          r.plays++;
+          if (r.t.loop !== 'infinite' && r.plays >= Math.max(1, r.t.loopCount || 1)) { r.st = 'done'; return; }
+          try { a.currentTime = 0; const p = a.play(); if (p && p.catch) p.catch(() => {}); } catch (e) {}
+        });
+        r.a = a;
+      }
+      return r.a;
+    };
+    const begin = (r) => {
+      const a = audioOf(r);
+      if (!a) { r.st = 'done'; return; }
+      r.st = 'playing'; r.time = 0; r.plays = 0; r.blocked = false;
+      a.loop = r.t.loop === 'infinite';
+      try { a.currentTime = 0; } catch (e) {}
+      a.volume = r.t.fadeIn > 0 ? 0 : base(r);
+      const p = a.play(); if (p && p.catch) p.catch(() => { r.blocked = true; });
+    };
+    const end = (r) => { r.st = 'done'; if (r.a) { try { r.a.pause(); } catch (e) {} } };
+    const halt = (r) => {
+      if (r.st === 'wait') { r.st = 'done'; return; }
+      if (r.st !== 'playing') return;
+      if (r.t.fadeOut > 0) { r.fo = r.foMax = r.t.fadeOut; r.st = 'fading'; } else end(r);
+    };
+    return {
+      trigger(name) {
+        for (const r of rs) if ((name === 'start' && r.t.stopMode === 'onPlay') || (name === 'death' && r.t.stopMode === 'onDeath')) halt(r);
+        for (const r of rs) if (r.t.startOn === name && (r.st === 'idle' || r.st === 'done')) {
+          r.wait = Math.max(0, r.t.delay || 0); r.st = 'wait'; if (r.wait <= 0) begin(r);
+        }
+      },
+      update(dt) {
+        for (const r of rs) {
+          if (r.st === 'wait') { r.wait -= dt; if (r.wait <= 0) begin(r); }
+          else if (r.st === 'playing' || r.st === 'fading') {
+            r.time += dt;
+            if (r.st === 'playing' && r.t.stopMode === 'afterSec' && r.time >= Math.max(0.1, r.t.stopAfter || 30)) halt(r);
+            let v = base(r);
+            if (r.t.fadeIn > 0 && r.time < r.t.fadeIn) v *= r.time / r.t.fadeIn;
+            if (r.st === 'fading') { r.fo -= dt; if (r.fo <= 0) { end(r); continue; } v *= r.fo / r.foMax; }
+            if (r.a) r.a.volume = Math.max(0, Math.min(1, v));
+          }
+        }
+      },
+      unlock() { for (const r of rs) if (r.blocked && r.a && (r.st === 'playing' || r.st === 'fading')) { const p = r.a.play(); if (p && p.then) p.then(() => { r.blocked = false; }).catch(() => {}); } },
+      stopAll() { for (const r of rs) { r.st = 'idle'; if (r.a) { try { r.a.pause(); } catch (e) {} } } }
+    };
+  }
+  function updateBGM(state, dt) {
+    const c = state.bgmCtl; if (!c) return;
+    let dead = false;
+    for (const it of state.items) if (it.kind === 'sprite' && it.control === 'player' && it._dead) { dead = true; break; }
+    if (dead && !state._bgmDead) c.trigger('death');
+    state._bgmDead = dead;
+    c.update(dt);
+  }
+
   function executeAction(state, it, action, params) {
     params = resolveParams(state, it, params);
     switch (action) {
@@ -472,6 +574,36 @@ function MiniRuntime() {
           timeLeft: params.duration != null ? params.duration : 3
         };
         break;
+      case 'playAnim': {
+        for (const tg of targetList(state, it, params.target)) {
+          if (tg.kind !== 'sprite') continue;
+          if (params.mode === 'stop') { tg._customAnim = null; continue; }
+          const an = tg.animations && tg.animations['custom:' + String(params.anim || '')];
+          if (!an || !an.frames.length) continue;
+          tg._customAnim = { key: 'custom:' + String(params.anim || ''), loop: params.mode === 'loop', lock: !!params.lock, t: an.frames.length / Math.max(1, an.fps || 8) };
+          tg._animFrame = 0; tg._animTime = 0;
+        }
+        break;
+      }
+      case 'sendSignal':
+        sendSignal(state, it, String(params.name || ''), params.to || 'all');
+        break;
+      case 'setBotAI': {
+        const v = Number(params.value), k = params.key;
+        for (const tg of targetList(state, it, params.target)) {
+          if (tg.kind !== 'sprite') continue;
+          if (k === 'botRange' || k === 'botPatrol') {
+            if (isFinite(v)) { const cur = tg[k] != null ? tg[k] : (k === 'botRange' ? 150 : 80); tg[k] = Math.max(0, params.mode === 'add' ? cur + v : v); }
+            continue;
+          }
+          if (!(k in AI_DEF)) continue;
+          if (!tg.ai) tg.ai = {};
+          const cur = tg.ai[k] != null ? tg.ai[k] : AI_DEF[k];
+          if (typeof AI_DEF[k] === 'boolean') tg.ai[k] = params.mode === 'toggle' ? !cur : v > 0;
+          else if (isFinite(v)) tg.ai[k] = params.mode === 'add' ? cur + v : v;
+        }
+        break;
+      }
       case 'setVar': {
         const name = String(params.name || '').trim();
         if (!name) break;
@@ -776,6 +908,8 @@ function MiniRuntime() {
     if (it._speedBuff)   { it._speedBuff.timeLeft   -= dt; if (it._speedBuff.timeLeft   <= 0) it._speedBuff = null; }
     if (it._gravityBuff) { it._gravityBuff.timeLeft -= dt; if (it._gravityBuff.timeLeft <= 0) it._gravityBuff = null; }
     if (it._scaleBuff)   { it._scaleBuff.timeLeft   -= dt; if (it._scaleBuff.timeLeft   <= 0) it._scaleBuff = null; }
+    if (it._turnTime > 0) it._turnTime -= dt;
+    if (it._customAnim && !it._customAnim.loop) { it._customAnim.t -= dt; if (it._customAnim.t <= 0) it._customAnim = null; }
 
     if (it._dead) { it._vx = 0; it._vy = 0; stepAnimation(it, dt); return; }
     if (it._invuln > 0) { it._invuln -= dt; if (it._invuln < 0) it._invuln = 0; }
@@ -802,12 +936,19 @@ function MiniRuntime() {
         it._onGround = false;
         fireEvent(state, it, 'onJump');
       }
-      if (moveX !== 0) it._facing = moveX > 0 ? 1 : -1;
+      if (moveX !== 0) {
+        const nf = moveX > 0 ? 1 : -1, tn = it.animations && it.animations.turn;
+        if (nf !== it._facing && state.opts && state.opts.turnAnim && it._onGround && tn && tn.frames.length && !(it._turnTime > 0)) {
+          it._turnFrom = it._facing; it._turnTime = tn.frames.length / Math.max(1, tn.fps || 8);
+        }
+        it._facing = nf;
+      }
       it._vx = moveX * BASE_SPEED * it.speed * speedMult;
     } else if (it.control === 'bot') {
       updateBotAI(state, it, dt);
     } else { it._vx = 0; }
 
+    if (it._customAnim && it._customAnim.lock) it._vx = 0;   // animation tuỳ chỉnh khoá di chuyển
     const wasOnGround = it._onGround;
     if (gravMult > 0) it._vy += BASE_GRAVITY * gravMult * dt * 60;
     else { it._vy *= 0.85; if (Math.abs(it._vy) < 0.02) it._vy = 0; }
@@ -837,8 +978,10 @@ function MiniRuntime() {
     // Determine state
     let st = 'idle';
     if (it.hp <= 0) st = 'die';
+    else if (it._customAnim && it.animations[it._customAnim.key] && it.animations[it._customAnim.key].frames.length) st = it._customAnim.key;
     else if (it._shootAnimTime > 0 && it.animations.shoot && it.animations.shoot.frames.length) st = 'shoot';
     else if (it._invuln > 0 && it.animations.hurt && it.animations.hurt.frames.length) st = 'hurt';
+    else if (it._turnTime > 0 && it.animations.turn && it.animations.turn.frames.length) st = 'turn';
     else if (!it._onGround) st = 'jump';
     else if (Math.abs(it._vx) > 0.15) st = 'run';
 
@@ -954,7 +1097,7 @@ function MiniRuntime() {
     const dw = it.w * sc, dh = it.h * sc;
     if (img) {
       ctx.translate(it.x, it.y);
-      ctx.scale(it._facing < 0 ? -1 : 1, 1);
+      ctx.scale(((it._state === 'turn' && it._turnFrom) ? it._turnFrom : it._facing) < 0 ? -1 : 1, 1);
       safeDraw(ctx, img, -dw / 2, -dh / 2, dw, dh);
     } else {
       ctx.fillStyle = it._dead ? '#5c2130' : (it.control === 'bot' ? '#ff5a6e' : '#7c5cff');
@@ -1291,7 +1434,7 @@ function MiniRuntime() {
     updateProjectiles, updateCamera,
     updateParticles, updateFloatingTexts, updateShake,
     render, drawUI, hitUIButton, spawnBullet, tryShoot,
-    fireEvent, executeAction, frameOf, initVars, bodyBoxes, respawnItem, AI_DEF
+    fireEvent, executeAction, frameOf, initVars, bodyBoxes, respawnItem, AI_DEF, createBGM, updateBGM
   };
 }
 
@@ -1469,7 +1612,8 @@ const State = {
   uiSelected: null, uiDrag: null,
   showMenu: false, fullscreen: false, dirty: false,
   varDefs: [], vars: {},
-  res: { scale: 1, pixel: false }
+  res: { scale: 1, pixel: false },
+  opts: { turnAnim: true }, music: { tracks: [] }, bgmCtl: null
 };
 
 function toast(msg, kind, ms) {
@@ -2065,7 +2209,7 @@ function makeSprite(o) {
     control: 'player', camera: false, hpMode: 'default',
     animations: {
       idle: emptyAnim(), run: emptyAnim(), jump: emptyAnim(),
-      hurt: emptyAnim(), die: emptyAnim(), shoot: emptyAnim(), bullet: emptyAnim()
+      hurt: emptyAnim(), die: emptyAnim(), shoot: emptyAnim(), bullet: emptyAnim(), turn: emptyAnim()
     },
     shoot: {
       enabled: false, dir: 'forward',
@@ -2435,7 +2579,9 @@ const TRIGGERS = [
   ['onIdle',        'Đứng yên N giây'],
   ['onHitBlock',    'Chạm khối'],
   ['onHitSprite',   'Chạm nhân vật khác'],
-  ['onVar',         'Biến thỏa điều kiện']
+  ['onVar',         'Biến thỏa điều kiện'],
+  ['onUIButton',    'Nhấn nút UI'],
+  ['onSignal',      'Nhận tín hiệu']
 ];
 const ACTIONS = [
   ['shakeScreen',   'Rung màn hình'],
@@ -2456,11 +2602,16 @@ const ACTIONS = [
   ['setCameraTarget','Đổi mục tiêu camera'],
   ['setVar',        'Đặt / đổi biến'],
   ['setHp',         'Đặt máu'],
-  ['respawn',       'Về vị trí xuất phát']
+  ['respawn',       'Về vị trí xuất phát'],
+  ['playAnim',      'Phát animation tuỳ chỉnh'],
+  ['sendSignal',    'Gửi tín hiệu cho nhân vật khác'],
+  ['setBotAI',      'Đổi biến Bot AI']
 ];
 const TRIGGER_PARAM_DEF = {
   onHpBelow: { percent: 50 },
   onKeyPress: { key: 'Fire', mode: 'press' },
+  onUIButton: { button: '', mode: 'press' },
+  onSignal: { name: 'sig1', from: 'any' },
   onVar: { name: 'score', op: '>=', value: '10' },
   onNearPlayer: { distance: 100 },
   onEvery: { interval: 2 },
@@ -2471,6 +2622,9 @@ const ACTION_PARAM_DEF = {
   changeHp:       { amount: -10, mode: 'amount' },
   spawnBullet:    { count: 1, spread: 0 },
   setVar:         { name: 'score', mode: 'add', value: '1' },
+  playAnim:       { target: 'self', anim: '', mode: 'once', lock: false },
+  sendSignal:     { name: 'sig1', to: 'all' },
+  setBotAI:       { target: 'self', key: 'chaseSpeed', mode: 'set', value: 1 },
   setHp:          { amount: 100 },
   teleport:       { dx: 0, dy: -40 },
   setPos:         { x: 320, y: 100 },
@@ -2503,6 +2657,26 @@ function renderVarsPanel(root) {
   root.appendChild(el('div', 'ev-hint', 'Tên + giá trị ban đầu. Dùng trong Điều kiện, hành động Đặt biến, trigger Biến, và text bay {tênBiến}.'));
 }
 
+const AI_LABELS = [['botRange', 'Tầm nhìn'], ['botPatrol', 'Phạm vi tuần'], ['chaseSpeed', 'Tốc độ đuổi'], ['reaction', 'Độ trễ phản ứng'],
+  ['attackRange', 'Tầm tấn công'], ['attackCd', 'Hồi chiêu thêm'], ['aggression', 'Độ hung hăng %'], ['keepDist', 'Giữ khoảng cách'],
+  ['fleeHp', 'Bỏ chạy khi HP dưới %'], ['loseTime', 'Thời gian mất dấu'], ['alertRadius', 'Bán kính báo động'], ['patrolWait', 'Chờ cuối đường'],
+  ['jumpChance', 'Nhảy qua vật cản %'], ['turnOnWall', 'Quay đầu khi gặp tường (0/1)'], ['edgeSafe', 'Tránh rơi mép (0/1)']];
+function targetOptions(withSelf) {
+  const o = [];
+  if (withSelf) o.push(['self', 'Chính nó']);
+  o.push(['__player', 'Người chơi (NV đầu tiên)']);
+  o.push(['group:all', 'Tất cả nhân vật']);
+  o.push(['group:player', 'Tất cả NV (người chơi)']);
+  o.push(['group:bot', 'Tất cả Bot']);
+  o.push(['group:npc', 'Tất cả NPC (đứng yên)']);
+  State.items.filter(i => i.kind === 'sprite').forEach(i => o.push([i.id, i.name]));
+  return o;
+}
+function allCustomAnimNames() {
+  const set = new Set();
+  State.items.forEach(i => { if (i.kind === 'sprite') Object.keys(i.animations || {}).forEach(k => { if (k.indexOf('custom:') === 0) set.add(k.slice(7)); }); });
+  return Array.from(set);
+}
 function renderEventCard(item, ev, idx) {
   const card = el('div', 'event-card');
   const head = el('div', 'ev-head');
@@ -2537,6 +2711,20 @@ function renderEventCard(item, ev, idx) {
       'Dùng tên phím: Fire, ArrowLeft, ArrowRight, ArrowUp, a, b, ...'));
     card.appendChild(row('Kiểu', selectInput(tp.mode || 'press', [['press', 'Vừa nhấn'], ['hold', 'Đang giữ (lặp)'], ['release', 'Vừa nhả']], v => { tp.mode = v; renderInspector(); })));
     if (tp.mode === 'hold') card.appendChild(row('Lặp mỗi (s)', numInput(tp.repeat != null ? tp.repeat : 0.2, v => tp.repeat = Math.max(0.05, v), 0.05, 0.05)));
+  } else if (ev.trigger === 'onUIButton') {
+    const btns = State.ui.buttons || [];
+    if (!btns.length) card.appendChild(el('div', 'ev-hint', 'Chưa có nút tuỳ chỉnh. Tạo ở tab UI, mục "Nút tùy chỉnh".'));
+    else {
+      if (!btns.some(b => b.id === tp.button)) tp.button = btns[0].id;
+      card.appendChild(row('Nút', selectInput(tp.button, btns.map(b => [b.id, (b.label || 'Nút') + ' (' + b.key + ')']), v => tp.button = v)));
+      card.appendChild(row('Kiểu', selectInput(tp.mode || 'press', [['press', 'Vừa nhấn'], ['hold', 'Đang giữ (lặp)'], ['release', 'Vừa nhả']], v => { tp.mode = v; renderInspector(); scheduleSave(); })));
+      if (tp.mode === 'hold') card.appendChild(row('Lặp mỗi (s)', numInput(tp.repeat != null ? tp.repeat : 0.2, v => tp.repeat = Math.max(0.05, v), 0.05, 0.05)));
+      card.appendChild(el('div', 'ev-hint', 'Mẹo: đặt "Phím" của nút thành tên riêng (vd B1) để không kích hoạt bắn đạn.'));
+    }
+  } else if (ev.trigger === 'onSignal') {
+    card.appendChild(row('Tên tín hiệu', textInput(tp.name || '', v => tp.name = v.replace(/[^A-Za-z0-9_]/g, ''))));
+    card.appendChild(row('Từ', selectInput(tp.from || 'any', [['any', 'Bất kỳ ai']].concat(targetOptions(false)), v => tp.from = v)));
+    card.appendChild(el('div', 'ev-hint', 'Chạy khi có nhân vật gửi tín hiệu cùng tên (hành động "Gửi tín hiệu").'));
   } else if (ev.trigger === 'onNearPlayer') {
     card.appendChild(row('Khoảng cách', numInput(tp.distance != null ? tp.distance : 100,
       v => tp.distance = Math.max(10, v), 10, 10)));
@@ -2649,6 +2837,29 @@ function renderEventCard(item, ev, idx) {
     case 'spawnBullet':
       r('Số viên', numInput(ap.count != null ? ap.count : 1, v => ap.count = clamp(Math.round(v), 1, 12), 1, 1, 12));
       r('Góc toả (độ)', numInput(ap.spread != null ? ap.spread : 0, v => ap.spread = clamp(v, 0, 180), 5, 0, 180));
+      break;
+    case 'playAnim': {
+      r('Nhân vật', selectInput(ap.target || 'self', targetOptions(true), v => { ap.target = v; scheduleSave(); }));
+      r('Kiểu', selectInput(ap.mode || 'once', [['once', 'Chạy 1 lần'], ['loop', 'Lặp'], ['stop', 'Dừng animation']], v => { ap.mode = v; scheduleSave(); }));
+      const names = allCustomAnimNames();
+      if (!names.length) card.appendChild(el('div', 'ev-hint', 'Chưa có animation tuỳ chỉnh. Tạo ở Inspector của nhân vật.'));
+      else {
+        if (!names.includes(ap.anim)) ap.anim = names[0];
+        r('Animation', selectInput(ap.anim, names.map(n => [n, n]), v => { ap.anim = v; scheduleSave(); }));
+      }
+      r('Khoá di chuyển', checkbox(!!ap.lock, v => { ap.lock = v; scheduleSave(); }));
+      break;
+    }
+    case 'sendSignal':
+      r('Tên tín hiệu', textInput(ap.name || '', v => ap.name = v.replace(/[^A-Za-z0-9_]/g, '')));
+      r('Gửi cho', selectInput(ap.to || 'all', [['all', 'Tất cả']].concat(targetOptions(false)), v => { ap.to = v; scheduleSave(); }));
+      card.appendChild(el('div', 'ev-hint', 'Nhân vật nhận cần có trigger "Nhận tín hiệu" cùng tên.'));
+      break;
+    case 'setBotAI':
+      r('Nhân vật', selectInput(ap.target || 'self', targetOptions(true), v => { ap.target = v; scheduleSave(); }));
+      r('Biến AI', selectInput(ap.key || 'chaseSpeed', AI_LABELS, v => { ap.key = v; scheduleSave(); }));
+      r('Kiểu', selectInput(ap.mode || 'set', [['set', 'Gán ='], ['add', 'Cộng +'], ['toggle', 'Bật/tắt (biến 0/1)']], v => { ap.mode = v; scheduleSave(); }));
+      r('Giá trị', numInput(ap.value != null ? ap.value : 1, v => ap.value = v, 0.1));
       break;
     case 'setVar':
       r('Tên biến', textInput(ap.name || '', v => ap.name = v.replace(/[^A-Za-z0-9_]/g, '')));
@@ -2777,8 +2988,30 @@ function renderSpriteInspector(root, item) {
   ag.appendChild(animSlot(item, 'jump',  'Nhảy'));
   ag.appendChild(animSlot(item, 'hurt',  'Mất máu'));
   ag.appendChild(animSlot(item, 'die',   'Chết'));
+  if (!item.animations.turn) item.animations.turn = emptyAnim();
   ag.appendChild(animSlot(item, 'shoot', 'Bắn đạn'));
+  ag.appendChild(animSlot(item, 'turn', 'Lật (đổi hướng)'));
   root.appendChild(ag);
+
+  root.appendChild(sectionHeader('Animation tuỳ chỉnh'));
+  const cg = el('div', 'anim-grid');
+  Object.keys(item.animations).filter(k => k.indexOf('custom:') === 0).forEach(k => {
+    const w = el('div');
+    w.appendChild(animSlot(item, k, k.slice(7)));
+    const rm = el('button', 'btn-mini danger', 'Xoá'); rm.style.width = '100%';
+    rm.onclick = () => { if (confirm('Xoá animation "' + k.slice(7) + '"?')) { delete item.animations[k]; renderInspector(); scheduleSave(); } };
+    w.appendChild(rm); cg.appendChild(w);
+  });
+  root.appendChild(cg);
+  const addCA = el('button', 'btn accent full', '＋ Thêm animation tuỳ chỉnh');
+  addCA.onclick = () => {
+    const nm = (prompt('Tên animation (chữ, số, _):', 'skill1') || '').replace(/[^A-Za-z0-9_]/g, '');
+    if (!nm) return;
+    if (item.animations['custom:' + nm]) { toast('Tên đã tồn tại', 'err'); return; }
+    item.animations['custom:' + nm] = emptyAnim(); renderInspector(); scheduleSave();
+  };
+  root.appendChild(addCA);
+  root.appendChild(el('div', 'ev-hint', 'Phát bằng Event: hành động "Phát animation tuỳ chỉnh" (kèm trigger "Nhấn nút UI" hoặc "Nhận tín hiệu").'));
 
   root.appendChild(sectionHeader('Bắn đạn'));
   root.appendChild(row('Bật bắn đạn', checkbox(item.shoot.enabled, v => {
@@ -3034,6 +3267,7 @@ function play() {
       it._invuln = 0; it._dead = false; it._shootCd = 0; it._shootAnimTime = 0;
       it._state = 'idle'; it._prevState = 'idle';
       it._animFrame = 0; it._animTime = 0;
+      it._turnTime = 0; it._customAnim = null; it._engaged = false; it._alertT = 0; it._loseT = 0; it._waitT = 0; it._reactT = 0;
       it._facing = 1;
       it._patrolOrigin = undefined; it._patrolDir = 1;
       it._pendingShots = [];
@@ -3064,6 +3298,10 @@ function play() {
   State.shakeScreen = { intensity: 0, timeLeft: 0, duration: 0.001 };
   State.camera = { x: VW/2, y: VH/2 };
   State.showMenu = !!(State.ui.mainMenu && State.ui.mainMenu.enabled);
+  if (State.bgmCtl) State.bgmCtl.stopAll();
+  State._bgmDead = false;
+  State.bgmCtl = RT.createBGM(State.music.tracks);
+  State.bgmCtl.trigger(State.showMenu ? 'menu' : 'start');
   State.playing = true;
   document.getElementById('btnPlay').disabled = true;
   document.getElementById('btnStop').disabled = false;
@@ -3074,6 +3312,7 @@ function play() {
 }
 function stop() {
   State.playing = false;
+  if (State.bgmCtl) { State.bgmCtl.stopAll(); State.bgmCtl = null; }
   for (const it of State.items) {          // trả nhân vật/khối về trạng thái lúc thiết kế
     if (it.kind === 'sprite') { it._facing = 1; it._state = 'idle'; it._animFrame = 0; it.hp = it.maxHp; it._vx = 0; it._vy = 0; }
     if (it._spawnX != null) { it.x = it._spawnX; it.y = it._spawnY; it._spawnX = null; }
@@ -3097,7 +3336,7 @@ function stop() {
    ============================================================ */
 function onPointerDown(e) {
   e.preventDefault();
-  if (State.playing && State.showMenu) { State.showMenu = false; return; }
+  if (State.playing && State.showMenu) { State.showMenu = false; if (State.bgmCtl) { State.bgmCtl.unlock(); State.bgmCtl.trigger('start'); } return; }
   if (State.playing) {
     const p = toStage(e.clientX, e.clientY);
     const key = RT.hitUIButton(p, State.ui);
@@ -3268,6 +3507,7 @@ function loopBody(t) {
   lastT = t;
   if (dt > 0.05) dt = 0.05;
   if (dt < 0) dt = 0;
+  if (State.playing) RT.updateBGM(State, dt);
 
   if (State.playing && !State.showMenu) {
     State.time += dt;
@@ -3367,6 +3607,17 @@ function drawUIEditorOverlay() {
 /* ============================================================
    SERIALIZE / DESERIALIZE
    ============================================================ */
+function makeTrack(o) {
+  o = o || {};
+  return {
+    id: o.id || uid(), name: o.name || 'Nhạc', url: o.url || '',
+    volume: o.volume != null ? Math.max(0, Math.min(1, +o.volume || 0)) : 0.8,
+    startOn: o.startOn || 'start', delay: Math.max(0, +o.delay || 0),
+    loop: o.loop === 'count' ? 'count' : 'infinite', loopCount: Math.max(1, Math.round(+o.loopCount || 1)),
+    stopMode: o.stopMode || 'never', stopAfter: Math.max(0.1, +o.stopAfter || 30),
+    fadeIn: Math.max(0, +o.fadeIn || 0), fadeOut: Math.max(0, +o.fadeOut || 0)
+  };
+}
 function sanitizeAI(a) {
   const o = {};
   if (a && typeof a === 'object') for (const k in RT.AI_DEF) {
@@ -3404,6 +3655,8 @@ function serialize() {
 
     vw: VW, vh: VH,
     res: { scale: State.res.scale, pixel: !!State.res.pixel },
+    opts: { turnAnim: !!State.opts.turnAnim },
+    music: { tracks: State.music.tracks.map(t => Object.assign({}, t)) },
     ui: JSON.parse(JSON.stringify(State.ui)),
     items: State.items.map(it => {
       if (it.kind === 'sprite') {
@@ -3455,6 +3708,8 @@ function serialize() {
 
 function deserialize(data) {
   State.res = { scale: Math.max(1, Math.min(4, Math.round(+(data && data.res && data.res.scale) || 1))), pixel: !!(data && data.res && data.res.pixel) };
+  State.opts = { turnAnim: !(data && data.opts) || data.opts.turnAnim !== false };
+  State.music = { tracks: ((data && data.music && data.music.tracks) || []).map(makeTrack) };
   State.varDefs = ((data && data.varDefs) || []).map(d => ({ name: String(d.name || ''), value: d.value != null ? String(d.value) : '0' }));
   State.items = [];
   State.selectedId = null;
@@ -3478,7 +3733,7 @@ function deserialize(data) {
           loop: a.loop !== false
         };
       }
-      ['idle','run','jump','hurt','die','shoot','bullet'].forEach(k => {
+      ['idle','run','jump','hurt','die','shoot','bullet','turn'].forEach(k => {
         if (!animations[k]) animations[k] = emptyAnim();
       });
 
@@ -3745,7 +4000,7 @@ async function renderSettings() {
   const lines = [
     ['Dự án', meta ? meta.name : '-'], ['Nhân vật / Bot', st.sprites], ['Khối', st.blocks],
     ['Frame ảnh', st.frames + ' (~' + fmtSize(st.bytes) + ')'], ['Hitbox', st.hb], ['Sự kiện', st.events],
-    ['Dung lượng dự án', meta ? fmtSize(meta.size || 0) : '-'], ['Nơi lưu', Store.name()], ['Phiên bản', 'Alpha 8.7']
+    ['Dung lượng dự án', meta ? fmtSize(meta.size || 0) : '-'], ['Nơi lưu', Store.name()], ['Phiên bản', 'Alpha 8.7.5']
   ];
   try {
     if (navigator.storage && navigator.storage.estimate) {
@@ -3767,7 +4022,7 @@ async function renderSettings() {
 }
 function mnhrText() {
   const meta = Projects.meta(State.currentProjectId);
-  return JSON.stringify({ mnhr: 1, engine: 'Alpha 8.7', name: meta ? meta.name : 'Dự án', savedAt: Date.now(), data: serialize() });
+  return JSON.stringify({ mnhr: 1, engine: 'Alpha 8.7.5', name: meta ? meta.name : 'Dự án', savedAt: Date.now(), data: serialize() });
 }
 function downloadMnhr() {
   try {
@@ -3827,6 +4082,60 @@ function bindSettings() {
   setInterval(() => { if (Settings.get().autosave && State.dirty && !State.playing) saveProject(true); }, 30000);
 }
 
+/* ============================================================
+   MENU NHẠC NỀN
+   ============================================================ */
+let bgmPrev = null;
+function stopBgmPreview() { if (bgmPrev) { try { bgmPrev.a.pause(); } catch (e) {} bgmPrev = null; } }
+async function importBgm() {
+  const f = await pickFiles({ accept: 'audio/*,.mp3,.ogg,.wav,.m4a' });
+  if (!f[0]) return;
+  if (f[0].size > 12e6 && !confirm('File nhạc lớn (' + fmtSize(f[0].size) + '). Vẫn import?')) return;
+  const url = await readAsDataURL(f[0]);
+  if (!url) { toast('Không đọc được file nhạc', 'err'); return; }
+  State.music.tracks.push(makeTrack({ name: f[0].name.replace(/\.[^.]+$/, ''), url }));
+  renderBgmList(); scheduleSave();
+}
+function renderBgmList() {
+  const box = document.getElementById('bgmList'); box.innerHTML = '';
+  if (!State.music.tracks.length) box.appendChild(el('div', 'empty', 'Chưa có nhạc nào.'));
+  State.music.tracks.forEach((t, i) => {
+    const c = el('div'); c.style.cssText = 'border:1px solid #262d3f;padding:8px;margin-bottom:8px;';
+    c.appendChild(row('Tên', textInput(t.name, v => { t.name = v; scheduleSave(); })));
+    c.appendChild(row('Âm lượng (%)', numInput(Math.round(t.volume * 100), v => { t.volume = clamp(v, 0, 100) / 100; scheduleSave(); }, 5, 0, 100)));
+    c.appendChild(row('Bắt đầu khi', selectInput(t.startOn, [['menu', 'Hiện Main Menu'], ['start', 'Bắt đầu chơi'], ['death', 'Người chơi chết']], v => { t.startOn = v; scheduleSave(); })));
+    c.appendChild(row('Trễ (giây)', numInput(t.delay, v => { t.delay = Math.max(0, v); scheduleSave(); }, 0.5, 0)));
+    c.appendChild(row('Lặp', selectInput(t.loop, [['infinite', 'Vô hạn'], ['count', 'Số lần']], v => { t.loop = v; scheduleSave(); renderBgmList(); })));
+    if (t.loop === 'count') c.appendChild(row('Số lần', numInput(t.loopCount, v => { t.loopCount = Math.max(1, Math.round(v)); scheduleSave(); }, 1, 1)));
+    c.appendChild(row('Kết thúc', selectInput(t.stopMode, [['never', 'Không tự dừng'], ['afterSec', 'Sau N giây'], ['onPlay', 'Khi bắt đầu chơi'], ['onDeath', 'Khi người chơi chết']], v => { t.stopMode = v; scheduleSave(); renderBgmList(); })));
+    if (t.stopMode === 'afterSec') c.appendChild(row('Sau (giây)', numInput(t.stopAfter, v => { t.stopAfter = Math.max(0.1, v); scheduleSave(); }, 1, 0.1)));
+    c.appendChild(row('Fade in (s)', numInput(t.fadeIn, v => { t.fadeIn = Math.max(0, v); scheduleSave(); }, 0.5, 0)));
+    c.appendChild(row('Fade out (s)', numInput(t.fadeOut, v => { t.fadeOut = Math.max(0, v); scheduleSave(); }, 0.5, 0)));
+    const bar = el('div'); bar.style.cssText = 'display:flex;gap:6px;margin-top:6px;';
+    const pv = el('button', 'btn-mini', 'Nghe thử');
+    pv.onclick = () => {
+      const same = bgmPrev && bgmPrev.t === t; stopBgmPreview(); if (same) return;
+      const a = new Audio(t.url); a.volume = t.volume;
+      const p = a.play(); if (p && p.catch) p.catch(() => toast('Không phát được file này', 'err'));
+      bgmPrev = { a, t };
+    };
+    const dl = el('button', 'btn-mini danger', 'Xoá');
+    dl.onclick = () => { if (confirm('Xoá nhạc "' + t.name + '"?')) { stopBgmPreview(); State.music.tracks.splice(i, 1); renderBgmList(); scheduleSave(); } };
+    bar.appendChild(pv); bar.appendChild(dl); c.appendChild(bar);
+    box.appendChild(c);
+  });
+}
+function openBgmModal() {
+  let m = document.getElementById('bgmModal');
+  if (!m) {
+    m = document.createElement('div'); m.id = 'bgmModal'; m.className = 'modal';
+    m.innerHTML = '<div class="modal-box" style="max-width:560px;"><h3>Nhạc nền</h3><p>Import nhạc, chọn lúc phát, lặp và lúc kết thúc. Nhạc phát khi bấm Chạy và trong game xuất ra (assets/audio).</p><div id="bgmList"></div><div class="modal-actions"><button id="btnBgmAdd" class="btn primary">＋ Import nhạc</button><button id="btnBgmClose" class="btn">Đóng</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById('btnBgmClose').onclick = () => { stopBgmPreview(); m.classList.remove('show'); };
+    document.getElementById('btnBgmAdd').onclick = importBgm;
+  }
+  renderBgmList(); m.classList.add('show');
+}
 function openProjectsModal() {
   const modal = document.getElementById('projectModal');
   const listEl = document.getElementById('projectList');
@@ -3868,6 +4177,11 @@ function openProjectsModal() {
   rb.appendChild(sectionHeader('Cài đặt dự án (khi xuất game)'));
   rb.appendChild(row('Độ phân giải', selectInput(String(State.res.scale), [['1', '640x360 (1x)'], ['2', '1280x720 (2x)'], ['3', '1920x1080 (3x)'], ['4', '2560x1440 (4x)']], v => { State.res.scale = +v; scheduleSave(); })));
   rb.appendChild(row('Pixel art (không làm mịn ảnh)', checkbox(!!State.res.pixel, v => { State.res.pixel = v; scheduleSave(); })));
+  rb.appendChild(row('Animation lật nhân vật khi đổi hướng', checkbox(!!State.opts.turnAnim, v => { State.opts.turnAnim = v; scheduleSave(); })));
+  const mb = el('button', 'btn accent full', 'Nhạc nền (' + State.music.tracks.length + ')');
+  mb.style.marginTop = '6px';
+  mb.onclick = () => { modal.classList.remove('show'); openBgmModal(); };
+  rb.appendChild(mb);
   const box = modal.querySelector('.modal-box');
   box.insertBefore(rb, box.querySelector('.modal-actions'));
   modal.classList.add('show');
@@ -3995,6 +4309,10 @@ const Exporter = (function () {
     L.push('particles: [], floatingTexts: [], vars: RT.initVars(data.varDefs||[]),');
     L.push('shakeScreen: {intensity:0, timeLeft:0, duration:0.001},');
     L.push('ui: data.ui || RT.defaultUI(), showMenu: !!(data.ui && data.ui.mainMenu && data.ui.mainMenu.enabled) };');
+    L.push('state.opts = data.opts || {};');
+    L.push('state.bgmCtl = RT.createBGM((data.music && data.music.tracks) || []);');
+    L.push('function unlockAudio(){ state.bgmCtl.unlock(); }');
+    L.push('window.addEventListener("pointerdown", unlockAudio); window.addEventListener("keydown", unlockAudio);');
 
     L.push('function loadImg(url, cb){if(!url) return cb(null);');
     L.push('var img = document.createElement("img");');
@@ -4011,7 +4329,7 @@ const Exporter = (function () {
     L.push('        frames: (src.frames||[]).map(MF) }');
     L.push('        : { frames: [], fps: 8, loop: true };');
     L.push('    }');
-    L.push('    ["idle","run","jump","hurt","die","shoot","bullet"].forEach(function(k){');
+    L.push('    ["idle","run","jump","hurt","die","shoot","bullet","turn"].forEach(function(k){');
     L.push('      if(!animations[k]) animations[k]={frames:[],fps:8,loop:true};});');
     L.push('    var sh = d.shoot||{};');
     L.push('    var hitboxes = (d.hitboxes||[]).map(function(h){return {ox:h.ox,oy:h.oy,w:h.w,h:h.h};});');
@@ -4094,7 +4412,7 @@ const Exporter = (function () {
 
     L.push('canvas.addEventListener("pointerdown", function(e){');
     L.push('  e.preventDefault();');
-    L.push('  if (state.showMenu) { state.showMenu = false; return; }');
+    L.push('  if (state.showMenu) { state.showMenu = false; state.bgmCtl.trigger("start"); return; }');
     L.push('  var p = getP(e);');
     L.push('  var key = RT.hitUIButton(p, state.ui);');
     L.push('  if (key === "__joy__") {');
@@ -4171,13 +4489,14 @@ const Exporter = (function () {
     L.push('    RT.updateFloatingTexts(state, dt);');
     L.push('    RT.updateShake(state, dt);');
     L.push('  }');
+    L.push('  RT.updateBGM(state, dt);');
     L.push('  ctx.setTransform(RES,0,0,RES,0,0); ctx.imageSmoothingEnabled = !(data.res && data.res.pixel);');
     L.push('  RT.render(ctx, state, { editor: false });');
     L.push('  } catch(e){ if(!loop.err){ loop.err=1; console.error(e); } }');
     L.push('  requestAnimationFrame(loop);');
     L.push('}');
 
-    L.push('loadAll(function(){ requestAnimationFrame(loop); });');
+    L.push('loadAll(function(){ state.bgmCtl.trigger(state.showMenu?"menu":"start"); requestAnimationFrame(loop); });');
     L.push('})();');
     L.push('<\/script>');
     L.push('</body></html>');
@@ -4185,7 +4504,8 @@ const Exporter = (function () {
   }
 
   const MIME_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/gif': 'gif',
-    'image/webp': 'webp', 'image/svg+xml': 'svg', 'image/bmp': 'bmp' };
+    'image/webp': 'webp', 'image/svg+xml': 'svg', 'image/bmp': 'bmp',
+    'audio/mpeg': 'mp3', 'audio/mp3': 'mp3', 'audio/ogg': 'ogg', 'audio/wav': 'wav', 'audio/x-wav': 'wav', 'audio/webm': 'webm', 'audio/aac': 'aac', 'audio/mp4': 'm4a', 'audio/x-m4a': 'm4a', 'audio/flac': 'flac' };
   function dataUrlToBytes(url) {
     const m = /^data:([^;,]*)(;base64)?,([\s\S]*)$/.exec(url);
     if (!m) return null;
@@ -4200,13 +4520,15 @@ const Exporter = (function () {
   function extractAssets(data) {
     const out = JSON.parse(JSON.stringify(data));
     const files = {}, seen = new Map();
-    let n = 0;
+    let n = 0, na = 0;
     const conv = (o) => {
       if (!o || typeof o.url !== 'string' || o.url.indexOf('data:') !== 0) return;
       if (!seen.has(o.url)) {
         const d = dataUrlToBytes(o.url);
         if (!d) return;
-        const path = 'assets/images/img_' + String(++n).padStart(3, '0') + '.' + (MIME_EXT[d.mime] || 'png');
+        const isA = /^(audio|video)/.test(d.mime);
+        const path = isA ? 'assets/audio/bgm_' + String(++na).padStart(3, '0') + '.' + (MIME_EXT[d.mime] || 'mp3')
+                         : 'assets/images/img_' + String(++n).padStart(3, '0') + '.' + (MIME_EXT[d.mime] || 'png');
         files[path] = d.bytes; seen.set(o.url, path);
       }
       o.url = seen.get(o.url);
@@ -4216,6 +4538,7 @@ const Exporter = (function () {
       for (const k in (it.tex || {})) conv(it.tex[k]);
       if (it.shoot) conv(it.shoot);
     }
+    ((out.music && out.music.tracks) || []).forEach(conv);
     return { data: out, files };
   }
   function buildPackage(data, customCode) {
@@ -4516,7 +4839,7 @@ async function init() {
   await loadProject(meta);
   updateCamInfo();
   requestAnimationFrame(loop);
-  toast('MNHR-engine Alpha 8.7 · lưu trữ: ' + Store.name(), 'ok', 2800);
+  toast('MNHR-engine Alpha 8.7.5 · lưu trữ: ' + Store.name(), 'ok', 2800);
 }
 
 return {
