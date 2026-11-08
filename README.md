@@ -36,7 +36,7 @@
 - Note: À mà nếu mọi người gặp lỗi vật lý ở Auto-Dedect-PNG Per-Frame bị lỗi thì mọi người đừng supprot nhé, Đấy không phải lỗi, đấy là tính năng đấy. (Joke)
 
 ---
-![Preview](https://files.catbox.moe/coyz92.gif)
+![Preview](https://ibb.co/yBZ5Bsdm)
 
 ---
 [Copyright 2026 (c) Meonehero]
