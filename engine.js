@@ -4588,7 +4588,16 @@ const TA_EASE = [['linear', 'Đều'], ['out', 'Chậm dần'], ['in', 'Nhanh d�
 const TA_PROPS = [['x', 'Vị trí X', 1], ['y', 'Vị trí Y', 1], ['rot', 'Xoay (độ)', 1], ['sx', 'Rộng (nhân)', 0.05], ['sy', 'Cao (nhân)', 0.05], ['alpha', 'Độ mờ (0-1)', 0.05]];
 const TA_ACTIONS = [['shake', 'Rung màn hình'], ['customAnim', 'Phát animation tuỳ chỉnh của khối'], ['signal', 'Gửi tín hiệu (cho nhân vật / khối)'], ['solid', 'Bật/tắt va chạm (rắn)'],
   ['hazard', 'Bật/tắt gây sát thương'], ['visible', 'Hiện/ẩn khối'], ['var', 'Đổi biến game'], ['startBlock', 'Chạy animation của khối khác'], ['stopAnim', 'Dừng chuỗi này']];
-const taUI = { item: null, t: 0, playing: false, last: 0, sel: null };
+const taUI = { item: null, t: 0, playing: false, last: 0, sel: null, zoom: 1, px: 0, py: 0, big: false, cur: null, view: null };
+const TA_CSS = '#taModal .modal-box{width:min(780px,98vw);max-width:98vw;max-height:96vh;overflow:auto;padding:10px;box-sizing:border-box;}' +
+  '#taPrevWrap{position:sticky;top:0;z-index:3;background:var(--panel,#14161c);padding-bottom:6px;}' +
+  '#taPrev{width:100%;display:block;touch-action:none;background:#0f1115;cursor:grab;}' +
+  '#taCtl{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px;}' +
+  '#taCtl button{min-width:44px;min-height:38px;}#taSeek{flex:1;min-width:110px;}' +
+  '#taModal .row{flex-wrap:wrap;gap:6px;}#taModal input[type=number],#taModal input[type=text],#taModal select{min-height:36px;}' +
+  '@media (min-width:900px){#taModal .modal-box{display:grid;grid-template-columns:minmax(360px,1fr) minmax(380px,1fr);column-gap:14px;align-items:start;width:min(1240px,97vw);}' +
+  '#taModal .modal-box>h3,#taModal .modal-box>.modal-actions{grid-column:1/-1;}#taPrevWrap{grid-column:1;grid-row:2;}' +
+  '#taBody{grid-column:2;grid-row:2;max-height:78vh;overflow:auto;padding-right:6px;}}';
 function newTechAnim() {
   return { enabled: true, trigger: { type: 'start', name: '', button: '', cond: { var: '', op: '>=', value: '1' } }, repeat: 'none', count: 0,
     once: false, retrigger: 'ignore', space: 'rel', steps: [], rules: [] };
@@ -4643,13 +4652,18 @@ function taDraw() {
   }
   const mx = Math.max(40, (x1 - x0) * 0.15), my = Math.max(40, (y1 - y0) * 0.15);
   x0 -= mx; x1 += mx; y0 -= my; y1 += my;
-  const W = cv.width, H = cv.height, sc = Math.min(W / (x1 - x0), H / (y1 - y0));
-  const ox = (W - (x1 - x0) * sc) / 2 - x0 * sc, oy = (H - (y1 - y0) * sc) / 2 - y0 * sc;
+  const W = cv.width, H = cv.height, sc0 = Math.min(W / (x1 - x0), H / (y1 - y0));
+  const c0x = (x0 + x1) / 2, c0y = (y0 + y1) / 2;
+  const sc = sc0 * taUI.zoom, cx = c0x + taUI.px, cy = c0y + taUI.py;
+  const ox = W / 2 - cx * sc, oy = H / 2 - cy * sc;
+  taUI.view = { W, H, sc, sc0, ox, oy, c0x, c0y };
   g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = '#0f1115'; g.fillRect(0, 0, W, H);
   g.setTransform(sc, 0, 0, sc, ox, oy);
-  g.strokeStyle = 'rgba(255,255,255,.06)'; g.lineWidth = 1 / sc; g.beginPath();
-  for (let x = Math.floor(x0 / 50) * 50; x <= x1; x += 50) { g.moveTo(x, y0); g.lineTo(x, y1); }
-  for (let y = Math.floor(y0 / 50) * 50; y <= y1; y += 50) { g.moveTo(x0, y); g.lineTo(x1, y); }
+  const vx0 = -ox / sc, vx1 = (W - ox) / sc, vy0 = -oy / sc, vy1 = (H - oy) / sc;
+  let gs = 50; while (gs * sc < 28) gs *= 2; while (gs * sc > 150 && gs > 1) gs /= 2;
+  g.strokeStyle = 'rgba(255,255,255,.07)'; g.lineWidth = 1 / sc; g.beginPath();
+  for (let x = Math.floor(vx0 / gs) * gs; x <= vx1; x += gs) { g.moveTo(x, vy0); g.lineTo(x, vy1); }
+  for (let y = Math.floor(vy0 / gs) * gs; y <= vy1; y += gs) { g.moveTo(vx0, y); g.lineTo(vx1, y); }
   g.stroke();
   for (const o of State.items) {
     if (o === it) continue;
@@ -4680,6 +4694,65 @@ function taDraw() {
   }
   g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = '#fff'; g.font = '13px sans-serif';
   g.fillText('t = ' + taUI.t.toFixed(2) + 's / ' + T.toFixed(2) + 's   (khung xanh = hitbox)', 8, 16);
+  g.textAlign = 'right'; g.fillText(Math.round(taUI.zoom * 100) + '%', W - 8, 16);
+  g.textAlign = 'left'; g.fillStyle = 'rgba(255,255,255,.75)'; g.font = '11px sans-serif';
+  if (taUI.cur) g.fillText('x ' + Math.round(taUI.cur[0]) + ' · y ' + Math.round(taUI.cur[1]), 8, H - 8);
+}
+function taApplySize() {
+  const cv = document.getElementById('taPrev'); if (!cv) return;
+  const wide = window.innerWidth >= 900;
+  cv.style.height = taUI.big ? (wide ? 'min(70vh,620px)' : 'min(62vh,520px)') : (wide ? '300px' : 'min(24vh,180px)');
+  const r = cv.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
+  const w = Math.max(160, Math.round(r.width * dpr)), h = Math.max(100, Math.round(r.height * dpr));
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+  const b = document.getElementById('taSizeBtn'); if (b) b.textContent = taUI.big ? 'Thu nhỏ' : 'Phóng to';
+  taDraw();
+}
+function taZoomAt(sx, sy, f) {   // zoom quanh điểm (sx, sy) trên khung, giữ nguyên điểm thế giới dưới con trỏ
+  const v = taUI.view; if (!v) return;
+  const nz = Math.max(0.1, Math.min(8, taUI.zoom * f));
+  const wx = (sx - v.ox) / v.sc, wy = (sy - v.oy) / v.sc, nsc = v.sc0 * nz;
+  taUI.zoom = nz;
+  taUI.px = (v.W / 2 - (sx - wx * nsc)) / nsc - v.c0x;
+  taUI.py = (v.H / 2 - (sy - wy * nsc)) / nsc - v.c0y;
+  taDraw();
+}
+function taBindPreview(cv) {
+  const ptrs = new Map(); let lastTap = 0, moved = 0, pd = 0, lastMid = null;
+  const pos = (e) => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * cv.width / (r.width || 1), (e.clientY - r.top) * cv.height / (r.height || 1)]; };
+  cv.addEventListener('pointerdown', (e) => {
+    try { cv.setPointerCapture(e.pointerId); } catch (_) {}
+    ptrs.set(e.pointerId, pos(e)); moved = 0;
+    if (ptrs.size === 2) { const a = Array.from(ptrs.values()); pd = Math.hypot(a[0][0] - a[1][0], a[0][1] - a[1][1]); lastMid = [(a[0][0] + a[1][0]) / 2, (a[0][1] + a[1][1]) / 2]; }
+  });
+  cv.addEventListener('pointermove', (e) => {
+    const p = pos(e), prev = ptrs.get(e.pointerId), v = taUI.view;
+    if (v) taUI.cur = [(p[0] - v.ox) / v.sc, (p[1] - v.oy) / v.sc];
+    if (!prev) { taDraw(); return; }
+    ptrs.set(e.pointerId, p);
+    if (ptrs.size === 1) {
+      moved += Math.abs(p[0] - prev[0]) + Math.abs(p[1] - prev[1]);
+      if (v && moved >= 8) { taUI.px -= (p[0] - prev[0]) / v.sc; taUI.py -= (p[1] - prev[1]) / v.sc; }
+      taDraw();
+    } else if (ptrs.size === 2 && v) {
+      const a = Array.from(ptrs.values()), d = Math.hypot(a[0][0] - a[1][0], a[0][1] - a[1][1]), mid = [(a[0][0] + a[1][0]) / 2, (a[0][1] + a[1][1]) / 2];
+      moved += 99;
+      if (pd > 0) taZoomAt(mid[0], mid[1], d / pd);
+      const v2 = taUI.view;
+      if (lastMid && v2) { taUI.px -= (mid[0] - lastMid[0]) / v2.sc; taUI.py -= (mid[1] - lastMid[1]) / v2.sc; }
+      pd = d; lastMid = mid; taDraw();
+    }
+  });
+  const end = (e) => {
+    const had = ptrs.delete(e.pointerId);
+    if (ptrs.size < 2) { pd = 0; lastMid = null; }
+    if (had && ptrs.size === 0 && moved < 8 && e.type === 'pointerup') {   // chạm 2 lần = phóng to / thu nhỏ khung xem trước
+      const now = Date.now();
+      if (now - lastTap < 320) { lastTap = 0; taUI.big = !taUI.big; taApplySize(); } else lastTap = now;
+    }
+  };
+  cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+  cv.addEventListener('wheel', (e) => { e.preventDefault(); const p = pos(e); taZoomAt(p[0], p[1], e.deltaY < 0 ? 1.15 : 1 / 1.15); }, { passive: false });
 }
 function taLoop(ts) {
   const m = document.getElementById('taModal');
@@ -4878,13 +4951,16 @@ function taRender() {
 }
 function openTechModal(item) {
   if (!item.techAnim) item.techAnim = newTechAnim();
-  taUI.item = item; taUI.t = 0; taUI.playing = false; taUI.sel = item.techAnim.steps[0] ? item.techAnim.steps[0].id : null;
+  Object.assign(taUI, { item, t: 0, playing: false, zoom: 1, px: 0, py: 0, big: false, cur: null, view: null, sel: item.techAnim.steps[0] ? item.techAnim.steps[0].id : null });
+  if (!document.getElementById('taStyle')) { const st = document.createElement('style'); st.id = 'taStyle'; st.textContent = TA_CSS; (document.head || document.body).appendChild(st); }
   let m = document.getElementById('taModal');
   if (!m) {
     m = document.createElement('div'); m.id = 'taModal'; m.className = 'modal';
-    m.innerHTML = '<div class="modal-box" style="max-width:760px;max-height:94vh;overflow:auto;"><h3>Animation Kỹ Thuật</h3>' +
-      '<div style="position:sticky;top:0;z-index:3;background:#14161c;padding-bottom:6px;"><canvas id="taPrev" width="720" height="300" style="width:100%;display:block;"></canvas>' +
-      '<div style="display:flex;gap:8px;align-items:center;margin-top:6px;"><button id="taPlay" class="btn primary">Phát</button><input id="taSeek" type="range" min="0" max="1000" value="0" style="flex:1;"></div></div>' +
+    m.innerHTML = '<div class="modal-box"><h3>Animation Kỹ Thuật</h3>' +
+      '<div id="taPrevWrap"><canvas id="taPrev" width="640" height="260"></canvas>' +
+      '<div id="taCtl"><button id="taPlay" class="btn primary">Phát</button><input id="taSeek" type="range" min="0" max="1000" value="0">' +
+      '<button id="taZoomOut" class="btn">−</button><button id="taZoomIn" class="btn">+</button><button id="taFit" class="btn">Vừa</button><button id="taSizeBtn" class="btn">Phóng to</button></div>' +
+      '<div style="font-size:11px;opacity:.7;margin-top:4px;">Chạm 2 lần vào khung xem trước để phóng to/thu nhỏ khung · kéo: di chuyển · lăn chuột hoặc chụm 2 ngón: zoom xa/gần</div></div>' +
       '<div id="taBody"></div><div class="modal-actions"><button id="btnTaClose" class="btn primary">Xong</button></div></div>';
     document.body.appendChild(m);
     document.getElementById('btnTaClose').onclick = () => { taUI.playing = false; m.classList.remove('show'); renderInspector(); };
@@ -4893,9 +4969,16 @@ function openTechModal(item) {
       if (taUI.playing) { taUI.last = performance.now(); requestAnimationFrame(taLoop); }
     };
     document.getElementById('taSeek').oninput = (e) => { taUI.playing = false; document.getElementById('taPlay').textContent = 'Phát'; taUI.t = taTotal() * (+e.target.value) / 1000; taDraw(); };
+    const zc = () => { const v = taUI.view; return v ? [v.W / 2, v.H / 2] : [0, 0]; };
+    document.getElementById('taZoomOut').onclick = () => { const c = zc(); taZoomAt(c[0], c[1], 1 / 1.4); };
+    document.getElementById('taZoomIn').onclick = () => { const c = zc(); taZoomAt(c[0], c[1], 1.4); };
+    document.getElementById('taFit').onclick = () => { taUI.zoom = 1; taUI.px = 0; taUI.py = 0; taDraw(); };
+    document.getElementById('taSizeBtn').onclick = () => { taUI.big = !taUI.big; taApplySize(); };
+    taBindPreview(document.getElementById('taPrev'));
+    window.addEventListener('resize', () => { if (m.classList.contains('show')) taApplySize(); });
   }
   document.getElementById('taPlay').textContent = 'Phát';
-  taRender(); m.classList.add('show');
+  taRender(); m.classList.add('show'); taApplySize();
 }
 
 function openProjectsModal() {
