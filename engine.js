@@ -1,5 +1,5 @@
 /* ============================================================
-   MNHR-engine — engine.js Alpha 8.7.5
+   MNHR-engine — engine.js Alpha 9.0.0
    Auto-detect đa frame + Hệ thống Biến (Events)
    ============================================================ */
 window.MNHR = (function () {
@@ -56,12 +56,18 @@ function MiniRuntime() {
   function faceOf(it) { return it.kind === 'sprite' && it._facing < 0 ? -1 : 1; }
   function scOf(it) { return (it.kind === 'sprite' && it._scaleBuff && it._scaleBuff.mult > 0) ? it._scaleBuff.mult : 1; }
   function getHitboxes(it) {
+    if (it.kind === 'block' && it._xf) return blockBoxes(it, it._xf);
     const L = hbList(it);
     if (!L) return [getBounds(it)];
     const fx = faceOf(it), sc = scOf(it);
     return L.map(h => ({ x: it.x + h.ox * fx * sc - h.w * sc / 2, y: it.y + h.oy * sc - h.h * sc / 2, w: h.w * sc, h: h.h * sc }));
   }
   function getBounds(it) {
+    if (it.kind === 'block' && it._xf) {
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      for (const b of blockBoxes(it, it._xf)) { x0 = Math.min(x0, b.x); y0 = Math.min(y0, b.y); x1 = Math.max(x1, b.x + b.w); y1 = Math.max(y1, b.y + b.h); }
+      return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+    }
     const fx = faceOf(it), sc = scOf(it);
     const L = hbList(it);
     if (L) {
@@ -80,7 +86,89 @@ function MiniRuntime() {
     }
     return { x: it.x - it.w * sc / 2, y: it.y - it.h * sc / 2, w: it.w * sc, h: it.h * sc };
   }
+  /* ---------- HÌNH HỌC: hộp có thể xoay (poly = 4 đỉnh) ---------- */
+  function polyOf(b) { return b.poly || [[b.x, b.y], [b.x + b.w, b.y], [b.x + b.w, b.y + b.h], [b.x, b.y + b.h]]; }
+  function makeRotBox(cx, cy, w, h, rot) {
+    if (!rot) return { x: cx - w / 2, y: cy - h / 2, w, h };
+    const c = Math.cos(rot), sn = Math.sin(rot), hw = w / 2, hh = h / 2;
+    const poly = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]].map(p => [cx + p[0] * c - p[1] * sn, cy + p[0] * sn + p[1] * c]);
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const p of poly) { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); }
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0, poly };
+  }
+  function projPoly(p, ax, ay) {
+    let mn = Infinity, mx = -Infinity;
+    for (const q of p) { const d = q[0] * ax + q[1] * ay; if (d < mn) mn = d; if (d > mx) mx = d; }
+    return [mn, mx];
+  }
+  function axesOf(p) {
+    const out = [];
+    for (let i = 0; i < p.length; i++) {
+      const a = p[i], b = p[(i + 1) % p.length], ex = b[0] - a[0], ey = b[1] - a[1], l = Math.hypot(ex, ey) || 1;
+      out.push([ey / l, -ex / l]);
+    }
+    return out;
+  }
+  /* Vector nhỏ nhất đẩy A ra khỏi B (null nếu không chồng nhau) */
+  function satMTV(A, B) {
+    const pa = polyOf(A), pb = polyOf(B);
+    let best = Infinity, nx = 0, ny = 0;
+    const axes = axesOf(pa).concat(axesOf(pb));
+    for (let i = 0; i < axes.length; i++) {
+      const ax = axes[i][0], ay = axes[i][1];
+      const ra = projPoly(pa, ax, ay), rb = projPoly(pb, ax, ay);
+      const o1 = ra[1] - rb[0], o2 = rb[1] - ra[0];
+      if (o1 <= 1e-9 || o2 <= 1e-9) return null;
+      const o = Math.min(o1, o2);
+      if (o < best) { best = o; if (o1 < o2) { nx = -ax; ny = -ay; } else { nx = ax; ny = ay; } }
+    }
+    return { nx, ny, depth: best };
+  }
+  function pointInBox(px, py, b) {
+    if (!b.poly) return px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h;
+    const p = b.poly; let sign = 0;
+    for (let i = 0; i < p.length; i++) {
+      const a = p[i], c = p[(i + 1) % p.length];
+      const cr = (c[0] - a[0]) * (py - a[1]) - (c[1] - a[1]) * (px - a[0]);
+      if (cr !== 0) { const sg = cr > 0 ? 1 : -1; if (sign === 0) sign = sg; else if (sg !== sign) return false; }
+    }
+    return true;
+  }
+  function hullOf(pts) {
+    pts = pts.slice().sort((p, q) => p[0] - q[0] || p[1] - q[1]);
+    const cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+    const lo = [], up = [];
+    for (const p of pts) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); }
+    for (let i = pts.length - 1; i >= 0; i--) { const p = pts[i]; while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); }
+    lo.pop(); up.pop();
+    return lo.concat(up);
+  }
+  /* Quãng đường tối thiểu đẩy A ngược hướng chuyển động (dirSign trên trục axis) để hết chồng B — dùng khi có hộp xoay */
+  function axisPush(a, b, axis, dirSign) {
+    const pa = polyOf(a), pb = polyOf(b), pts = [];
+    for (const q of pb) for (const r of pa) pts.push([q[0] - r[0], q[1] - r[1]]);
+    const H = hullOf(pts), ux = axis === 'x' ? -dirSign : 0, uy = axis === 'y' ? -dirSign : 0;
+    let best = null;
+    for (let i = 0; i < H.length; i++) {
+      const p = H[i], q = H[(i + 1) % H.length], ex = q[0] - p[0], ey = q[1] - p[1];
+      const den = ux * ey - uy * ex; if (Math.abs(den) < 1e-12) continue;
+      const t = (p[0] * ey - p[1] * ex) / den, sp = (p[0] * uy - p[1] * ux) / den;
+      if (t > 1e-9 && sp >= -1e-9 && sp <= 1 + 1e-9 && (best === null || t < best)) best = t;
+    }
+    return best === null ? 0 : best;
+  }
+  /* Hộp của khối sau khi áp dụng animation kỹ thuật (dịch / co giãn / xoay quanh tâm) */
+  function blockBoxes(it, T) {
+    const cx = it.x + T.dx, cy = it.y + T.dy, c = Math.cos(T.rot), sn = Math.sin(T.rot);
+    const L = hbList(it);
+    const rects = (L && L.length) ? L : [{ ox: 0, oy: 0, w: it.w, h: it.h }];
+    return rects.map(h => {
+      const lx = h.ox * T.sx, ly = h.oy * T.sy;
+      return makeRotBox(cx + lx * c - ly * sn, cy + lx * sn + ly * c, h.w * T.sx, h.h * T.sy, T.rot);
+    });
+  }
   function aabb(a, b) {
+    if (a.poly || b.poly) return satMTV(a, b) !== null;
     return a.x < b.x + b.w && a.x + a.w > b.x &&
            a.y < b.y + b.h && a.y + a.h > b.y;
   }
@@ -99,7 +187,8 @@ function MiniRuntime() {
         const b = boxesB[j];
         if (!aabb(a, b)) continue;
         let depth;
-        if (axis === 'x') depth = dirSign > 0 ? (a.x + a.w) - b.x : (b.x + b.w) - a.x;
+        if (a.poly || b.poly) depth = axisPush(a, b, axis, dirSign);
+        else if (axis === 'x') depth = dirSign > 0 ? (a.x + a.w) - b.x : (b.x + b.w) - a.x;
         else depth = dirSign > 0 ? (a.y + a.h) - b.y : (b.y + b.h) - a.y;
         if (depth > bestDepth) { bestDepth = depth; best = { a, b }; }
       }
@@ -113,35 +202,16 @@ function MiniRuntime() {
     try { ctx.drawImage(img, ...a); return true; } catch (e) { return false; }
   }
   /* Hộp va chạm địa hình: KHÔNG phụ thuộc frame/animation → hết kẹt khi đổi frame (hitbox theo frame chỉ dùng cho sát thương/chạm) */
-  /* Gộp hitbox mọi frame của trạng thái hiện tại thành 1 hộp (ổn định khi sprite đổi kích thước mỗi frame) */
-  function stateUnion(it) {
-    const A = it.animations; if (!A) return null;
-    const an = A[it._state] || A.idle;
-    if (!an || !an.frames || !an.frames.length) return null;
-    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-    for (const f of an.frames) {
-      if (!f.hitboxes || !f.hitboxes.length) continue;
-      for (const h of cleanList(f.hitboxes)) {
-        x0 = Math.min(x0, h.ox - h.w / 2); x1 = Math.max(x1, h.ox + h.w / 2);
-        y0 = Math.min(y0, h.oy - h.h / 2); y1 = Math.max(y1, h.oy + h.h / 2);
-      }
-    }
-    if (x0 === Infinity) return null;
-    return [{ ox: (x0 + x1) / 2, oy: (y0 + y1) / 2, w: x1 - x0, h: y1 - y0 }];
-  }
-  /* it.hbMode: 'frame' = theo từng frame · 'state' = gộp theo trạng thái · 'single' = 1 hitbox mặc định */
+  /* Hitbox va chạm của nhân vật: dùng đúng hitbox đã tạo (hitbox riêng của frame nếu có, không thì hitbox chung), neo chân chống lún/nổi */
   function bodyBoxes(it) {
     if (it.kind !== 'sprite') return getHitboxes(it);
-    const fx = faceOf(it), sc = scOf(it), mode = it.hbMode || 'frame';
+    const fx = faceOf(it), sc = scOf(it);
     const def = (it.hitboxes && it.hitboxes.length) ? cleanList(it.hitboxes) : null;
     const area = (a) => a.reduce((t, h) => t + h.w * h.h, 0);
-    let L = def;
-    if (mode === 'frame') {
-      L = hbList(it);
-      if (L && def && L !== def && area(L) < 0.3 * area(def)) L = def;   // hitbox frame bất thường (quá nhỏ) → dùng mặc định
-    } else if (mode === 'state') L = stateUnion(it) || def;
+    let L = hbList(it);
+    if (L && def && L !== def && area(L) < 4) L = def;   // hitbox frame suy biến (gần như rỗng) → dùng mặc định
     if (L) {
-      let dy = 0;   // neo "chân": đáy hitbox trùng đáy hitbox mặc định → đổi frame/trạng thái không làm lún/nổi
+      let dy = 0;   // neo "chân": đáy hitbox frame trùng đáy hitbox mặc định
       const bot = (a) => a.reduce((m, h) => Math.max(m, h.oy + h.h / 2), -Infinity);
       if (L !== def) {
         if (def) dy = bot(def) - bot(L);
@@ -165,6 +235,17 @@ function MiniRuntime() {
           for (let b = 0; b < ob.length; b++) {
             const A = mine[a], B = ob[b];
             if (!aabb(A, B)) continue;
+            if (A.poly || B.poly) {   // hộp xoay: đẩy theo vector nhỏ nhất (SAT)
+              const m = satMTV(A, B);
+              if (m) {
+                const dd = Math.min(m.depth, 32);
+                it.x += m.nx * dd; it.y += m.ny * dd;
+                if (m.ny < -0.3) { it._onGround = true; if (it._vy > 0) it._vy = 0; }
+                else if (m.ny > 0.3 && it._vy < 0) it._vy = 0;
+                if (m.nx * it._vx < 0) it._vx = 0;
+              }
+              fixed = true; break;
+            }
             const px = Math.min(A.x + A.w - B.x, B.x + B.w - A.x);
             const py = Math.min(A.y + A.h - B.y, B.y + B.h - A.y);
             if (px < py) {
@@ -387,6 +468,10 @@ function MiniRuntime() {
   function sendSignal(state, from, name, to) {
     if (!name) return;
     for (const o of state.items) {
+      if (o.kind === 'block' && o.techAnim && o.techAnim.enabled && o.techAnim.trigger && o.techAnim.trigger.type === 'signal' && o.techAnim.trigger.name === name) {
+        if (!to || to === 'all' || to === 'group:all' || to === o.id) startTech(state, o);
+        continue;
+      }
       if (o.kind !== 'sprite' || !o.events) continue;
       if (to && to !== 'all' && targetList(state, from, to).indexOf(o) < 0) continue;
       for (const ev of o.events) {
@@ -398,6 +483,201 @@ function MiniRuntime() {
       }
     }
   }
+  /* ============================================================
+     ANIMATION KỸ THUẬT (chỉ dành cho khối)
+     ============================================================ */
+  const TA_DEFAULT = { x: 0, y: 0, rot: 0, sx: 1, sy: 1, alpha: 1 };
+  function bezier(x1, y1, x2, y2, t) {
+    if (t <= 0) return 0; if (t >= 1) return 1;
+    const cx = 3 * x1, bx = 3 * (x2 - x1) - cx, ax = 1 - cx - bx;
+    const cy = 3 * y1, by = 3 * (y2 - y1) - cy, ay = 1 - cy - by;
+    const X = (u) => ((ax * u + bx) * u + cx) * u, dX = (u) => (3 * ax * u + 2 * bx) * u + cx;
+    let u = t;
+    for (let i = 0; i < 8; i++) { const e = X(u) - t; if (Math.abs(e) < 1e-6) break; const d = dX(u); if (Math.abs(d) < 1e-6) break; u -= e / d; }
+    if (!(u >= 0 && u <= 1) || Math.abs(X(u) - t) > 1e-4) {
+      let lo = 0, hi = 1; u = t;
+      for (let i = 0; i < 30; i++) { if (X(u) < t) lo = u; else hi = u; u = (lo + hi) / 2; }
+    }
+    return ((ay * u + by) * u + cy) * u;
+  }
+  function easeFn(st, u) {
+    u = Math.max(0, Math.min(1, u));
+    switch (st.ease) {
+      case 'in': return u * u;                                   // nhanh dần
+      case 'out': return 1 - (1 - u) * (1 - u);                  // chậm dần
+      case 'inout': return u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2;
+      case 'back': { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(u - 1, 3) + c1 * Math.pow(u - 1, 2); }
+      case 'bounce': {
+        const n = 7.5625, d = 2.75;
+        if (u < 1 / d) return n * u * u;
+        if (u < 2 / d) { u -= 1.5 / d; return n * u * u + 0.75; }
+        if (u < 2.5 / d) { u -= 2.25 / d; return n * u * u + 0.9375; }
+        u -= 2.625 / d; return n * u * u + 0.984375;
+      }
+      case 'elastic': { if (u === 0 || u === 1) return u; return Math.pow(2, -10 * u) * Math.sin((u * 10 - 0.75) * (2 * Math.PI) / 3) + 1; }
+      case 'bezier': { const b = st.bez || [0.25, 0.1, 0.25, 1]; return bezier(b[0], b[1], b[2], b[3], u); }
+      default: return u;                                          // đều
+    }
+  }
+  /* Thời điểm bắt đầu tuyệt đối của từng bước (tính từ lúc kích hoạt chuỗi) */
+  function techSchedule(ta) {
+    const steps = ta.steps || [], S = {}, byId = {}, vis = {};
+    steps.forEach(st => { byId[st.id] = st; });
+    let cyc = false;
+    const start = (st) => {
+      if (S[st.id] != null) return S[st.id];
+      if (vis[st.id]) { cyc = true; return 0; }
+      vis[st.id] = true;
+      const a = st.after || { ref: 'start', mode: 'end', delay: 0 };
+      let t = 0;
+      if (a.ref && a.ref !== 'start' && a.ref !== st.id && byId[a.ref]) {
+        const r = byId[a.ref];
+        t = start(r) + (a.mode === 'start' ? 0 : Math.max(0, r.dur || 0));
+      }
+      t += Math.max(0, a.delay || 0);
+      vis[st.id] = false; S[st.id] = t;
+      return t;
+    };
+    steps.forEach(start);
+    let total = 0;
+    steps.forEach(st => { total = Math.max(total, S[st.id] + Math.max(0, st.dur || 0)); });
+    (ta.rules || []).forEach(r => {
+      const st = byId[r.step]; if (!st) return;
+      total = Math.max(total, S[st.id] + (r.when === 'end' ? Math.max(0, st.dur || 0) : 0) + Math.max(0, r.delay || 0));
+    });
+    return { S, total, cyc };
+  }
+  function propAt(list, n, t, base) {
+    let v = base;
+    for (let k = 0; k < n; k++) {
+      const q = list[k];
+      if (t < q.S) break;
+      const from = q.p.from == null ? propAt(list, k, q.S, base) : +q.p.from;
+      const to = +q.p.to;
+      v = (q.dur <= 0 || t >= q.S + q.dur) ? to : from + (to - from) * easeFn(q.st, (t - q.S) / q.dur);
+    }
+    return v;
+  }
+  function evalTech(it, ta, t, sched) {
+    sched = sched || techSchedule(ta);
+    const rel = ta.space !== 'abs', out = {};
+    for (const key in TA_DEFAULT) {
+      const list = (ta.steps || []).filter(st => st.props && st.props[key] && st.props[key].on)
+        .map(st => ({ st, S: sched.S[st.id], dur: Math.max(0, st.dur || 0), p: st.props[key] }))
+        .sort((a, b) => a.S - b.S);
+      let base = TA_DEFAULT[key];
+      if (!rel && key === 'x') base = it.x;
+      if (!rel && key === 'y') base = it.y;
+      out[key] = list.length ? propAt(list, list.length, t, base) : base;
+    }
+    return {
+      dx: rel ? out.x : out.x - it.x, dy: rel ? out.y : out.y - it.y,
+      rot: out.rot * Math.PI / 180,
+      sx: Math.max(0.01, out.sx), sy: Math.max(0.01, out.sy),
+      alpha: Math.max(0, Math.min(1, out.alpha))
+    };
+  }
+  function applyFlag(cur, v) { return v === 'on' ? true : v === 'off' ? false : !cur; }
+  function runTechAction(state, b, r) {
+    const p = r.params || {};
+    switch (r.action) {
+      case 'shake': executeAction(state, b, 'shakeScreen', { intensity: Math.max(0, +p.level || 1) * 2, duration: p.dur != null ? +p.dur : 0.5 }); break;
+      case 'customAnim': {
+        if (p.mode === 'stop') { b._customAnim = null; break; }
+        const an = b.animations && b.animations['custom:' + (p.name || '')];
+        if (!an || !an.frames.length) break;
+        b._customAnim = { key: 'custom:' + p.name, loop: p.mode === 'loop', t: an.frames.length / Math.max(1, an.fps || 8) };
+        b._animFrame = 0; b._animTime = 0;
+        break;
+      }
+      case 'signal': sendSignal(state, b, String(p.name || ''), p.to || 'all'); break;
+      case 'solid': b.solid = applyFlag(b.solid, p.value); break;
+      case 'hazard': b.hazard = applyFlag(b.hazard, p.value); break;
+      case 'visible': b._hidden = !applyFlag(!b._hidden, p.value); break;
+      case 'var': executeAction(state, b, 'setVar', { name: p.name, mode: p.mode || 'set', value: p.value }); break;
+      case 'sound': executeAction(state, b, 'playSound', p); break;
+      case 'startBlock': { const o = state.items.find(i => i.id === p.target && i.kind === 'block'); if (o) startTech(state, o); break; }
+      case 'stopAnim': if (b._ta) b._ta.running = false; break;
+    }
+  }
+  function techRules(state, b, ta, sched, a, z) {   // chạy các hành động có thời điểm trong (a, z]
+    for (const r of (ta.rules || [])) {
+      const st = (ta.steps || []).find(x => x.id === r.step);
+      if (!st) continue;
+      const tau = sched.S[st.id] + (r.when === 'end' ? Math.max(0, st.dur || 0) : 0) + Math.max(0, r.delay || 0);
+      if (tau > a && tau <= z) runTechAction(state, b, r);
+    }
+  }
+  function techState(b) {
+    return b._ta || (b._ta = { running: false, e: 0, prevT: -1e-9, cycle: 0, used: false, init: false, prevTouch: false, prevKey: false, prevCond: false, sched: null });
+  }
+  function startTech(state, b) {
+    const ta = b.techAnim;
+    if (!ta || !ta.enabled || !ta.steps || !ta.steps.length) return;
+    const R = techState(b);
+    if (R.running && ta.retrigger !== 'restart') return;
+    if (ta.once && R.used) return;
+    R.used = true; R.running = true; R.e = 0; R.prevT = -1e-9; R.cycle = 0; R.sched = techSchedule(ta);
+  }
+  function updateTechAnims(state, dt) {
+    for (const b of state.items) {
+      if (b.kind !== 'block' || !b.techAnim || !b.techAnim.enabled || !b.techAnim.steps || !b.techAnim.steps.length) continue;
+      const ta = b.techAnim, R = techState(b), tg = ta.trigger || { type: 'start' };
+      let fire = false;
+      if (tg.type === 'start') { if (!R.init) { R.init = true; fire = true; } }
+      else if (tg.type === 'touch') {
+        const bb = getHitboxes(b).map(x => ({ x: x.x - 3, y: x.y - 3, w: x.w + 6, h: x.h + 6, poly: x.poly }));
+        let touching = false;
+        for (const s of state.items) if (s.kind === 'sprite' && s.control === 'player' && !s._dead && anyHitboxOverlap(bodyBoxes(s), bb)) { touching = true; break; }
+        if (touching && !R.prevTouch) fire = true;
+        R.prevTouch = touching;
+      } else if (tg.type === 'button') {
+        const ub = ((state.ui && state.ui.buttons) || []).find(x => x.id === tg.button);
+        const down = !!(ub && state.keys && state.keys[ub.key]);
+        if (down && !R.prevKey) fire = true;
+        R.prevKey = down;
+      } else if (tg.type === 'var') {
+        const ok = condPass(state, b, tg.cond);
+        if (ok && !R.prevCond) fire = true;
+        R.prevCond = ok;
+      }
+      if (fire) startTech(state, b);
+      if (!R.running) continue;
+      const sched = R.sched, T = Math.max(0.0001, sched.total), lp = ta.repeat || 'none', cnt = Math.max(0, Math.round(ta.count || 0));
+      R.e += dt;
+      let t, ft, cyc = 0, finished = false;
+      if (lp === 'none') { t = Math.min(R.e, T); ft = t; finished = R.e >= T; }
+      else {
+        const period = lp === 'pingpong' ? 2 * T : T;
+        cyc = Math.floor(R.e / period);
+        if (cnt > 0 && cyc >= cnt) { finished = true; cyc = cnt - 1; t = lp === 'pingpong' ? 0 : T; ft = lp === 'pingpong' ? null : T; }
+        else { const u = R.e - cyc * period; if (lp === 'pingpong' && u > T) { t = 2 * T - u; ft = null; } else { t = u; ft = u; } }
+      }
+      const old = getHitboxes(b), oldXf = b._xf;
+      const xf = evalTech(b, ta, t, sched);
+      b._xf = xf;
+      if (cyc !== R.cycle) { techRules(state, b, ta, sched, R.prevT, T); R.prevT = -1e-9; R.cycle = cyc; }
+      if (ft != null) { techRules(state, b, ta, sched, R.prevT, ft); R.prevT = ft; }
+      else { techRules(state, b, ta, sched, R.prevT, T); R.prevT = T; }
+      if (finished) { techRules(state, b, ta, sched, R.prevT, T); R.running = false; }
+      // chở nhân vật đứng trên khối đặc đang di chuyển (không xoay)
+      if (b.solid && !xf.rot && !(oldXf && oldXf.rot)) {
+        const ddx = xf.dx - (oldXf ? oldXf.dx : 0), ddy = xf.dy - (oldXf ? oldXf.dy : 0);
+        if (ddx || ddy) {
+          for (const s of state.items) {
+            if (s.kind !== 'sprite' || s._dead || !s._onGround) continue;
+            let fx0 = Infinity, fx1 = -Infinity, feet = -Infinity;
+            for (const q of bodyBoxes(s)) { fx0 = Math.min(fx0, q.x); fx1 = Math.max(fx1, q.x + q.w); feet = Math.max(feet, q.y + q.h); }
+            for (const ob of old) {
+              if (ob.poly) continue;
+              if (fx1 > ob.x + 1 && fx0 < ob.x + ob.w - 1 && Math.abs(feet - ob.y) <= 3) { s.x += ddx; s.y += ddy; break; }
+            }
+          }
+        }
+      }
+    }
+  }
+
   /* ---------- NHẠC NỀN ---------- */
   function createBGM(tracks) {
     const rs = [];
@@ -593,14 +873,14 @@ function MiniRuntime() {
         for (const tg of targetList(state, it, params.target)) {
           if (tg.kind !== 'sprite') continue;
           if (k === 'botRange' || k === 'botPatrol') {
-            if (isFinite(v)) { const cur = tg[k] != null ? tg[k] : (k === 'botRange' ? 150 : 80); tg[k] = Math.max(0, params.mode === 'add' ? cur + v : v); }
+            if (isFinite(v)) { const cur = tg[k] != null ? tg[k] : (k === 'botRange' ? 150 : 80); tg[k] = clampAI(k, params.mode === 'add' ? cur + v : v); }
             continue;
           }
           if (!(k in AI_DEF)) continue;
           if (!tg.ai) tg.ai = {};
           const cur = tg.ai[k] != null ? tg.ai[k] : AI_DEF[k];
           if (typeof AI_DEF[k] === 'boolean') tg.ai[k] = params.mode === 'toggle' ? !cur : v > 0;
-          else if (isFinite(v)) tg.ai[k] = params.mode === 'add' ? cur + v : v;
+          else if (isFinite(v)) tg.ai[k] = clampAI(k, params.mode === 'add' ? cur + v : v);
         }
         break;
       }
@@ -690,6 +970,22 @@ function MiniRuntime() {
     }
   }
 
+  /* Đi xuống dốc của khối xoay: bám sát mặt dốc (không bị coi là đang rơi) */
+  function snapSlope(state, it) {
+    let best = null;
+    for (const o of state.items) {
+      if (o === it || o.kind !== 'block' || !o.solid || o._dead) continue;
+      const ob = getHitboxes(o);
+      if (!ob.some(q => q.poly)) continue;
+      const moved = bodyBoxes(it).map(b => ({ x: b.x, y: b.y + 10, w: b.w, h: b.h, poly: b.poly }));
+      if (!anyHitboxOverlap(moved, ob)) continue;
+      const d = deepestHitboxPair(moved, ob, 'y', 1);
+      if (!d) continue;
+      const shift = 10 - d.depth;
+      if (shift > 0.01 && shift <= 10 && (best === null || shift < best)) best = shift;
+    }
+    if (best !== null) { it.y += best; it._vy = 0; it._onGround = true; }
+  }
   function resolveCollisions(state, it, axis) {
     let mine = bodyBoxes(it);
     for (let i = 0; i < state.items.length; i++) {
@@ -699,12 +995,17 @@ function MiniRuntime() {
       if (other.hazard && it.hp > 0 && anyHitboxOverlap(getHitboxes(it), ob)) damage(state, it, 10);
       if (!other.solid || !anyHitboxOverlap(mine, ob)) continue;
       if (axis === 'x') {
+        const slope = it._onGround && ob.some(q => q.poly);   // leo dốc nhẹ của khối xoay: nâng lên thay vì chặn ngang
         if (it._vx > 0) {
           const d = deepestHitboxPair(mine, ob, 'x', 1);
+          const up = slope ? deepestHitboxPair(mine, ob, 'y', 1) : null;
+          if (up && up.depth <= Math.abs(it._vx) * 1.2 + 0.5) { it.y -= up.depth; mine = bodyBoxes(it); continue; }
           if (d) it.x -= Math.min(d.depth, 24);
           it._vx = 0;
         } else if (it._vx < 0) {
           const d = deepestHitboxPair(mine, ob, 'x', -1);
+          const up = slope ? deepestHitboxPair(mine, ob, 'y', 1) : null;
+          if (up && up.depth <= Math.abs(it._vx) * 1.2 + 0.5) { it.y -= up.depth; mine = bodyBoxes(it); continue; }
           if (d) it.x += Math.min(d.depth, 24);
           it._vx = 0;
         }
@@ -721,6 +1022,7 @@ function MiniRuntime() {
       }
       mine = bodyBoxes(it);
     }
+    if (axis === 'x' && it._onGround && it._vy >= 0 && it._vx !== 0) snapSlope(state, it);
   }
 
   /* ---------- BULLETS ---------- */
@@ -779,6 +1081,9 @@ function MiniRuntime() {
 
   const AI_DEF = { chaseSpeed: 0.7, reaction: 0, attackRange: 0, attackCd: 0, aggression: 100, keepDist: 50,
     fleeHp: 0, loseTime: 0, alertRadius: 0, patrolWait: 0, jumpChance: 0, turnOnWall: false, edgeSafe: false };
+  const AI_RANGE = { botRange: [0, 3000], botPatrol: [0, 3000], chaseSpeed: [0.1, 5], reaction: [0, 10], attackRange: [0, 2000], attackCd: [0, 30],
+    aggression: [0, 100], keepDist: [0, 1000], fleeHp: [0, 100], loseTime: [0, 60], alertRadius: [0, 2000], patrolWait: [0, 60], jumpChance: [0, 100] };
+  function clampAI(k, v) { const r = AI_RANGE[k]; return r ? Math.max(r[0], Math.min(r[1], v)) : v; }
   function aiOf(it) { const a = it.ai || {}, o = {}; for (const k in AI_DEF) o[k] = a[k] != null ? a[k] : AI_DEF[k]; return o; }
   function groundAhead(state, it, dir) {
     let x0 = Infinity, x1 = -Infinity, bot = -Infinity;
@@ -786,7 +1091,7 @@ function MiniRuntime() {
     const px = dir > 0 ? x1 + 4 : x0 - 4, py = bot + 6;
     for (const o of state.items) {
       if (o.kind !== 'block' || !o.solid || o._dead) continue;
-      for (const h of getHitboxes(o)) if (px >= h.x && px <= h.x + h.w && py >= h.y && py <= h.y + h.h) return true;
+      for (const h of getHitboxes(o)) if (pointInBox(px, py, h)) return true;
     }
     return false;
   }
@@ -931,15 +1236,18 @@ function MiniRuntime() {
         if (jy < -0.65 && it._onGround) jump = true;
       }
       if (fire) tryShoot(state, it);
-      if (jump && it._onGround) {
+      if (jump && it._onGround && !(it._customAnim && it._customAnim.lock)) {   // animation khoá di chuyển cũng khoá nhảy
         it._vy = -BASE_JUMP * it.jumpPower;
         it._onGround = false;
         fireEvent(state, it, 'onJump');
       }
       if (moveX !== 0) {
         const nf = moveX > 0 ? 1 : -1, tn = it.animations && it.animations.turn;
-        if (nf !== it._facing && state.opts && state.opts.turnAnim && it._onGround && tn && tn.frames.length && !(it._turnTime > 0)) {
-          it._turnFrom = it._facing; it._turnTime = tn.frames.length / Math.max(1, tn.fps || 8);
+        if (nf !== it._facing) {
+          if (it._turnTime > 0) it._turnTime = 0;   // đổi hướng lại giữa chừng → huỷ animation lật (tránh vẽ sai hướng)
+          else if (state.opts && state.opts.turnAnim && it._onGround && tn && tn.frames.length) {
+            it._turnFrom = it._facing; it._turnTime = tn.frames.length / Math.max(1, tn.fps || 8);
+          }
         }
         it._facing = nf;
       }
@@ -1017,7 +1325,11 @@ function MiniRuntime() {
   }
 
   function updateBlock(it, dt) {
-    const anim = it.animations && it.animations.default;
+    if (it._customAnim && !it._customAnim.loop) {
+      it._customAnim.t -= dt;
+      if (it._customAnim.t <= 0) { it._customAnim = null; it._animFrame = 0; it._animTime = 0; }
+    }
+    const anim = it.animations && it.animations[it._customAnim ? it._customAnim.key : 'default'];
     if (!anim || !anim.frames || !anim.frames.length) return;
     const fps = anim.fps || 8;
     it._animTime = (it._animTime || 0) + dt;
@@ -1132,7 +1444,17 @@ function MiniRuntime() {
     ctx.restore();
   }
   function drawBlock(ctx, it, editor) {
-    const anim = it.animations && it.animations.default;
+    if (it._hidden) return;
+    const T = it._xf;
+    if (!T) { drawBlockBase(ctx, it, editor); return; }
+    ctx.save();
+    ctx.globalAlpha *= Math.max(0, Math.min(1, T.alpha));
+    ctx.translate(it.x + T.dx, it.y + T.dy); ctx.rotate(T.rot); ctx.scale(T.sx, T.sy); ctx.translate(-it.x, -it.y);
+    drawBlockBase(ctx, it, editor);
+    ctx.restore();
+  }
+  function drawBlockBase(ctx, it, editor) {
+    const anim = it.animations && it.animations[it._customAnim ? it._customAnim.key : 'default'];
     if (anim && anim.frames && anim.frames.length) {
       const idx = (it._animFrame || 0) % anim.frames.length;
       const f = anim.frames[idx];
@@ -1434,7 +1756,7 @@ function MiniRuntime() {
     updateProjectiles, updateCamera,
     updateParticles, updateFloatingTexts, updateShake,
     render, drawUI, hitUIButton, spawnBullet, tryShoot,
-    fireEvent, executeAction, frameOf, initVars, bodyBoxes, respawnItem, AI_DEF, createBGM, updateBGM
+    fireEvent, executeAction, frameOf, initVars, bodyBoxes, respawnItem, AI_DEF, clampAI, createBGM, updateBGM, updateTechAnims, evalTech, techSchedule, startTech, blockBoxes, satMTV, makeRotBox, axisPush, easeFn
   };
 }
 
@@ -1822,6 +2144,7 @@ async function doSliceSheet() {
 const hitboxState = {
   itemId: null, W: 0, H: 0, img: null,
   boxes: [], scale: 1, frameSets: new Map(),
+  defBoxes: [], cur: null, item: null, targets: [],
   drawing: false, drawStart: null, drawPreview: null
 };
 let hitboxCanvas, hitboxCtx2;
@@ -1869,6 +2192,8 @@ function openHitboxModal(item) {
     hitboxState.boxes = [{ x: 0, y: 0, w: item.w, h: item.h }];
   }
 
+  hitboxState.defBoxes = hitboxState.boxes; hitboxState.cur = null; hitboxState.item = item;
+  hbBuildBar(item);
   document.getElementById('hitboxTitle').textContent = 'Hitbox: ' + (item.name || '');
   document.getElementById('hitboxModal').classList.add('show');
   document.getElementById('hitboxAllFrames').checked = true;
@@ -1891,6 +2216,72 @@ function openHitboxModal(item) {
   renderHitboxList();
   updateHitboxInfo();
 }
+
+/* ---- Chọn mục tiêu đang sửa: Mặc định hoặc từng frame ---- */
+function hbFrameLabels(item) {
+  const out = [];
+  const names = { idle: 'Đứng yên', run: 'Chạy', jump: 'Nhảy', hurt: 'Bị đánh', die: 'Chết', shoot: 'Bắn', turn: 'Lật' };
+  const add = (key, a) => { if (a && a.frames) a.frames.forEach((f, i) => out.push({ f, label: (names[key] || (key.indexOf('custom:') === 0 ? key.slice(7) : key)) + ' #' + (i + 1) })); };
+  if (item.kind === 'sprite') { for (const k in item.animations) if (k !== 'bullet') add(k, item.animations[k]); }
+  else add('default', item.animations && item.animations.default);
+  return out;
+}
+function hbBuildBar(item) {
+  let bar = document.getElementById('hbTargetBar');
+  if (!bar) {
+    const wrap = document.getElementById('hitboxWrap');
+    bar = document.createElement('div'); bar.id = 'hbTargetBar';
+    bar.style.cssText = 'display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:6px 0;font-size:12px;';
+    wrap.parentNode.insertBefore(bar, wrap);
+  }
+  hitboxState.targets = hbFrameLabels(item);
+  bar.innerHTML = '';
+  const lb = document.createElement('span'); lb.textContent = 'Đang sửa:'; bar.appendChild(lb);
+  const sel = document.createElement('select'); sel.id = 'hbTargetSel'; sel.style.maxWidth = '230px';
+  sel.onchange = () => { const i = parseInt(sel.value, 10); hbSetTarget(i >= 0 ? hitboxState.targets[i].f : null); };
+  bar.appendChild(sel);
+  const rm = document.createElement('button'); rm.id = 'hbTargetRm'; rm.className = 'btn'; rm.textContent = 'Bỏ hitbox riêng';
+  rm.onclick = () => { if (hitboxState.cur) { hitboxState.frameSets.delete(hitboxState.cur); hbSetTarget(hitboxState.cur); } };
+  bar.appendChild(rm);
+  const lb2 = document.createElement('span'); lb2.textContent = 'Cách Auto-Detect:'; lb2.style.marginLeft = '8px'; bar.appendChild(lb2);
+  const ms = document.createElement('select'); ms.id = 'hbMethodSel';
+  [['perframe', 'Mỗi frame riêng'], ['one', 'Một frame tự chọn (dùng chung)'], ['merge', 'Gộp tất cả frame thành 1']].forEach(kv => {
+    const o = document.createElement('option'); o.value = kv[0]; o.textContent = kv[1]; ms.appendChild(o);
+  });
+  ms.value = 'perframe'; bar.appendChild(ms);
+  const cbx = document.getElementById('hitboxAllFrames');
+  if (cbx && cbx.parentNode && cbx.parentNode.style) cbx.parentNode.style.display = 'none';   // thay bằng ô chọn 3 cách
+  hbRefreshBar();
+}
+function hbRefreshBar() {
+  const sel = document.getElementById('hbTargetSel'); if (!sel) return;
+  sel.innerHTML = '';
+  const o0 = document.createElement('option'); o0.value = '-1'; o0.textContent = 'Mặc định (frame chưa có hitbox riêng)'; sel.appendChild(o0);
+  hitboxState.targets.forEach((t, i) => {
+    const o = document.createElement('option'); o.value = String(i);
+    o.textContent = t.label + (hitboxState.frameSets.has(t.f) ? '  ●' : ''); sel.appendChild(o);
+  });
+  sel.value = String(hitboxState.cur ? hitboxState.targets.findIndex(t => t.f === hitboxState.cur) : -1);
+  const rm = document.getElementById('hbTargetRm');
+  if (rm) rm.disabled = !(hitboxState.cur && hitboxState.frameSets.has(hitboxState.cur));
+}
+function hbSetTarget(f) {
+  hitboxState.cur = f || null;
+  hitboxState.drawing = false; hitboxState.drawPreview = null;
+  const base = hitboxState.item ? pickPreviewImage(hitboxState.item) : null;
+  if (!f) { hitboxState.boxes = hitboxState.defBoxes; hitboxState.img = base; }
+  else {
+    hitboxState.boxes = hitboxState.frameSets.has(f) ? hitboxState.frameSets.get(f) : hitboxState.defBoxes.map(b => Object.assign({}, b));
+    hitboxState.img = f.img || base;
+  }
+  hbRefreshBar(); redrawHitboxCanvas(); renderHitboxList(); updateHitboxInfo();
+}
+function hbCommit() {   // ghi mảng đang sửa vào đúng mục tiêu (mặc định / frame)
+  if (hitboxState.cur) hitboxState.frameSets.set(hitboxState.cur, hitboxState.boxes);
+  else hitboxState.defBoxes = hitboxState.boxes;
+  hbRefreshBar();
+}
+function hbReplace(arr) { hitboxState.boxes = arr; hbCommit(); }
 
 function pickPreviewImage(item) {
   if (item.kind === 'sprite') {
@@ -1965,7 +2356,7 @@ function renderHitboxList() {
     del.className = 'hb-del';
     del.textContent = '✕';
     del.onclick = () => {
-      hitboxState.boxes.splice(i, 1); hitboxState.frameSets = new Map();
+      hitboxState.boxes.splice(i, 1); hbCommit();
       redrawHitboxCanvas(); renderHitboxList(); updateHitboxInfo();
     };
     r.appendChild(del);
@@ -1973,7 +2364,9 @@ function renderHitboxList() {
   });
 }
 function updateHitboxInfo() {
-  document.getElementById('hitboxInfo').textContent = 'Mặc định: ' + hitboxState.boxes.length + ' vùng' + (hitboxState.frameSets.size ? ' • ' + hitboxState.frameSets.size + ' frame có hitbox riêng' : '');
+  const own = hitboxState.frameSets.size;
+  const head = hitboxState.cur ? ('Frame này: ' + (hitboxState.frameSets.has(hitboxState.cur) ? 'hitbox riêng' : 'đang kế thừa mặc định (chưa lưu riêng)')) : 'Mặc định';
+  document.getElementById('hitboxInfo').textContent = head + ' · ' + hitboxState.boxes.length + ' vùng' + (own ? ' · ' + own + ' frame có hitbox riêng' : '');
 }
 function hbPointerPos(e) {
   const r = hitboxCanvas.getBoundingClientRect();
@@ -2007,7 +2400,7 @@ function hbPointerUp(e) {
   hitboxState.drawPreview = null;
   if (p && p.w >= 2 && p.h >= 2) {
     hitboxState.boxes.push({ x: p.x, y: p.y, w: p.w, h: p.h });
-    hitboxState.frameSets = new Map();
+    hbCommit();
     renderHitboxList(); updateHitboxInfo();
   }
   redrawHitboxCanvas();
@@ -2132,32 +2525,42 @@ function hbAutoDetect() {
   const alphaThr = clamp(parseInt(document.getElementById('hitboxAlpha').value, 10) || 10, 0, 255);
   const allFrames = document.getElementById('hitboxAllFrames').checked;
 
+  const msel = document.getElementById('hbMethodSel');
+  const method = (msel && msel.value) || 'perframe';
   let rects;
-  if (allFrames) {
+  if (method === 'perframe' || method === 'merge') {
     rects = autoDetectAllFrames(item, hitboxState.W, hitboxState.H, cellSize, alphaThr);
     if (rects === null) { toast('Không có frame nào để nhận diện', 'err'); return; }
     if (!rects.length) { toast('Không tìm thấy vùng đặc', 'err'); return; }
-    hitboxState.frameSets = autoDetectPerFrame(item, hitboxState.W, hitboxState.H, cellSize, alphaThr) || new Map();
-    toast('Auto-detect riêng từng frame: ' + hitboxState.frameSets.size + ' frame', 'ok', 3000);
-  } else {
-    hitboxState.frameSets = new Map();
-    if (!hitboxState.img) { toast('Không có ảnh', 'err'); return; }
-    rects = autoDetectHitboxes(hitboxState.img, hitboxState.W, hitboxState.H, cellSize, alphaThr);
-    if (rects === null) { toast('Không đọc được pixel', 'err'); return; }
-    if (!rects.length) { toast('Không tìm thấy vùng đặc', 'err'); return; }
-    toast('Auto-detect (frame đầu): ' + rects.length + ' vùng', 'ok');
+    if (method === 'perframe') {
+      hitboxState.frameSets = autoDetectPerFrame(item, hitboxState.W, hitboxState.H, cellSize, alphaThr) || new Map();
+      toast('Auto-detect: mỗi frame một hitbox riêng (' + hitboxState.frameSets.size + ' frame)', 'ok', 3200);
+    } else {
+      if (hitboxState.frameSets.size && !confirm('Hitbox riêng của ' + hitboxState.frameSets.size + ' frame sẽ bị xoá và dùng 1 hitbox chung. Tiếp tục?')) return;
+      hitboxState.frameSets = new Map();
+      toast('Auto-detect: gộp tất cả frame thành 1 hitbox (' + rects.length + ' vùng)', 'ok', 3200);
+    }
+    hitboxState.defBoxes = rects;   // hitbox chung = phần gộp mọi frame
+    hbSetTarget(null);
+    return;
   }
-  hitboxState.boxes = rects;
-  redrawHitboxCanvas();
-  renderHitboxList();
-  updateHitboxInfo();
+  // 'one': một frame tự chọn → dùng chung cho mọi frame
+  if (!hitboxState.img) { toast('Không có ảnh', 'err'); return; }
+  rects = autoDetectHitboxes(hitboxState.img, hitboxState.W, hitboxState.H, cellSize, alphaThr);
+  if (rects === null) { toast('Không đọc được pixel', 'err'); return; }
+  if (!rects.length) { toast('Không tìm thấy vùng đặc', 'err'); return; }
+  if (hitboxState.frameSets.size && !confirm('Hitbox riêng của ' + hitboxState.frameSets.size + ' frame sẽ bị xoá và dùng 1 hitbox chung. Tiếp tục?')) return;
+  hitboxState.frameSets = new Map();
+  hitboxState.defBoxes = rects;
+  toast('Auto-detect: dùng frame ' + (hitboxState.cur ? 'đang chọn' : 'đầu tiên') + ' làm hitbox chung (' + rects.length + ' vùng)', 'ok', 3200);
+  hbSetTarget(null);
 }
 
 function saveHitbox() {
   const item = State.items.find(i => i.id === hitboxState.itemId);
   if (!item) { closeHitboxModal(); return; }
   const W = hitboxState.W, H = hitboxState.H;
-  item.hitboxes = hitboxState.boxes.map(b => ({
+  item.hitboxes = hitboxState.defBoxes.map(b => ({
     ox: b.x + b.w/2 - W/2,
     oy: b.y + b.h/2 - H/2,
     w: b.w, h: b.h
@@ -2168,14 +2571,16 @@ function saveHitbox() {
     else delete f.hitboxes;
   }
   renderInspector(); renderLayers(); scheduleSave();
-  toast('Đã lưu ' + item.hitboxes.length + ' hitbox', 'ok');
+  const own = collectFrameObjs(item).filter(f => f.hitboxes && f.hitboxes.length).length;
+  toast('Đã lưu ' + item.hitboxes.length + ' hitbox mặc định' + (own ? ' · ' + own + ' frame có hitbox riêng' : '') +
+    '', 'ok', 4500);
   closeHitboxModal();
 }
 function closeHitboxModal() {
   document.getElementById('hitboxModal').classList.remove('show');
   hitboxState.itemId = null;
   hitboxState.img = null;
-  hitboxState.boxes = [];
+  hitboxState.boxes = []; hitboxState.defBoxes = []; hitboxState.cur = null; hitboxState.item = null; hitboxState.targets = [];
   hitboxState.frameSets = new Map();
   hitboxState.drawing = false;
   hitboxState.drawPreview = null;
@@ -2217,7 +2622,7 @@ function makeSprite(o) {
       speed: 8, bulletW: 14, bulletH: 14,
       useGravity: false, bulletGravity: 5
     },
-    botRange: 150, botPatrol: 80, noPush: false, hbMode: 'state', ai: {},
+    botRange: 150, botPatrol: 80, noPush: false, ai: {},
     speed: 1, jumpPower: 1, gravity: 1,
     hp: 92, maxHp: 92, iframe: 1,
     _vx: 0, _vy: 0, _onGround: false, _facing: 1,
@@ -2667,8 +3072,8 @@ function targetOptions(withSelf) {
   o.push(['__player', 'Người chơi (NV đầu tiên)']);
   o.push(['group:all', 'Tất cả nhân vật']);
   o.push(['group:player', 'Tất cả NV (người chơi)']);
-  o.push(['group:bot', 'Tất cả Bot']);
-  o.push(['group:npc', 'Tất cả NPC (đứng yên)']);
+  o.push(['group:bot', 'Tất cả Bot (loại "Bot / NPC")']);
+  o.push(['group:npc', 'Tất cả nhân vật "Đứng yên"']);
   State.items.filter(i => i.kind === 'sprite').forEach(i => o.push([i.id, i.name]));
   return o;
 }
@@ -2940,7 +3345,6 @@ function renderSpriteInspector(root, item) {
   root.appendChild(sg);
 
   root.appendChild(sectionHeader('Hitbox'));
-  root.appendChild(row('Hitbox va chạm khối', selectInput(item.hbMode || 'frame', [['frame', 'Theo từng frame'], ['state', 'Theo trạng thái'], ['single', 'Một hitbox (mặc định)']], v => { item.hbMode = v; scheduleSave(); })));
   root.appendChild(hitboxButton(item));
 
   root.appendChild(sectionHeader('Chuyển động & Camera'));
@@ -3123,6 +3527,34 @@ function renderBlockInspector(root, item) {
   ag.appendChild(animSlot(item, 'default', 'Animation khối'));
   root.appendChild(ag);
 
+  root.appendChild(sectionHeader('Animation tuỳ chỉnh của khối'));
+  const cgb = el('div', 'anim-grid');
+  Object.keys(item.animations).filter(k => k.indexOf('custom:') === 0).forEach(k => {
+    const w = el('div');
+    w.appendChild(animSlot(item, k, k.slice(7)));
+    const rm = el('button', 'btn-mini danger', 'Xoá'); rm.style.width = '100%';
+    rm.onclick = () => { if (confirm('Xoá animation "' + k.slice(7) + '"?')) { delete item.animations[k]; renderInspector(); scheduleSave(); } };
+    w.appendChild(rm); cgb.appendChild(w);
+  });
+  root.appendChild(cgb);
+  const addCB = el('button', 'btn full', '＋ Thêm animation tuỳ chỉnh');
+  addCB.onclick = () => {
+    const nm = (prompt('Tên animation (chữ, số, _):', 'glow') || '').replace(/[^A-Za-z0-9_]/g, '');
+    if (!nm) return;
+    if (item.animations['custom:' + nm]) { toast('Tên đã tồn tại', 'err'); return; }
+    item.animations['custom:' + nm] = emptyAnim(); renderInspector(); scheduleSave();
+  };
+  root.appendChild(addCB);
+
+  root.appendChild(sectionHeader('Animation Kỹ Thuật'));
+  const tsum = item.techAnim && item.techAnim.steps && item.techAnim.steps.length
+    ? (item.techAnim.steps.length + ' bước · ' + RT.techSchedule(item.techAnim).total.toFixed(2) + 's · ' + (item.techAnim.enabled ? 'đang bật' : 'đang tắt'))
+    : 'Chưa có animation kỹ thuật.';
+  root.appendChild(el('div', 'ev-hint', tsum));
+  const tbtn = el('button', 'btn accent full', 'Mở Animation Kỹ Thuật');
+  tbtn.onclick = () => openTechModal(item);
+  root.appendChild(tbtn);
+
   root.appendChild(sectionHeader('Texture tĩnh'));
   const grid = el('div', 'anim-grid');
   ['all', 'top', 'bottom', 'left', 'right'].forEach(k => grid.appendChild(texSlot(item, k)));
@@ -3286,6 +3718,7 @@ function play() {
       it._spawnX = it.x; it._spawnY = it.y;
     } else if (it.kind === 'block') {
       it._animFrame = 0; it._animTime = 0; it._dead = false;
+      it._solid0 = it.solid; it._hazard0 = it.hazard; it._xf = null; it._ta = null; it._hidden = false; it._customAnim = null;
     }
   }
   State.keys = {};
@@ -3316,6 +3749,10 @@ function stop() {
   for (const it of State.items) {          // trả nhân vật/khối về trạng thái lúc thiết kế
     if (it.kind === 'sprite') { it._facing = 1; it._state = 'idle'; it._animFrame = 0; it.hp = it.maxHp; it._vx = 0; it._vy = 0; }
     if (it._spawnX != null) { it.x = it._spawnX; it.y = it._spawnY; it._spawnX = null; }
+    if (it.kind === 'block') {
+      if (it._solid0 != null) { it.solid = it._solid0; it.hazard = it._hazard0; }
+      it._solid0 = null; it._hazard0 = null; it._xf = null; it._ta = null; it._hidden = false; it._customAnim = null;
+    }
     it._dead = false;
   }
   State.showMenu = false;
@@ -3511,6 +3948,7 @@ function loopBody(t) {
 
   if (State.playing && !State.showMenu) {
     State.time += dt;
+    RT.updateTechAnims(State, dt);
     for (const it of State.items) {
       if (it.kind === 'sprite') RT.updateItem(State, it, dt, State.keys);
       else if (it.kind === 'block') RT.updateBlock(it, dt);
@@ -3622,7 +4060,7 @@ function sanitizeAI(a) {
   const o = {};
   if (a && typeof a === 'object') for (const k in RT.AI_DEF) {
     if (a[k] == null) continue;
-    o[k] = typeof RT.AI_DEF[k] === 'boolean' ? !!a[k] : (isFinite(+a[k]) ? +a[k] : RT.AI_DEF[k]);
+    o[k] = typeof RT.AI_DEF[k] === 'boolean' ? !!a[k] : (isFinite(+a[k]) ? RT.clampAI(k, +a[k]) : RT.AI_DEF[k]);
   }
   return o;
 }
@@ -3685,7 +4123,7 @@ function serialize() {
           botRange: it.botRange != null ? it.botRange : 150,
           botPatrol: it.botPatrol != null ? it.botPatrol : 80,
           noPush: !!it.noPush,
-          hbMode: it.hbMode || 'frame', ai: Object.assign({}, it.ai || {}),
+          ai: Object.assign({}, it.ai || {}),
           speed: it.speed, jumpPower: it.jumpPower, gravity: it.gravity,
           hp: it.hp, maxHp: it.maxHp, iframe: it.iframe
         };
@@ -3698,9 +4136,15 @@ function serialize() {
       return {
         kind: 'block', id: it.id, name: it.name,
         x: it.x, y: it.y, w: it.w, h: it.h,
-        solid: it.solid, hazard: it.hazard, tex,
+        solid: it._solid0 != null ? it._solid0 : it.solid, hazard: it._hazard0 != null ? it._hazard0 : it.hazard, tex,
         hitboxes: (it.hitboxes || []).map(h => ({ ox: h.ox, oy: h.oy, w: h.w, h: h.h })),
-        animations: { default: serializeAnim(it.animations && it.animations.default) }
+        animations: (() => {
+          const o = {};
+          for (const k in (it.animations || {})) o[k] = serializeAnim(it.animations[k]);
+          if (!o.default) o.default = serializeAnim(null);
+          return o;
+        })(),
+        techAnim: it.techAnim ? JSON.parse(JSON.stringify(it.techAnim)) : null
       };
     })
   };
@@ -3778,7 +4222,7 @@ function deserialize(data) {
         botRange: d.botRange != null ? d.botRange : 150,
         botPatrol: d.botPatrol != null ? d.botPatrol : 80,
         noPush: !!d.noPush,
-        hbMode: d.hbMode || 'frame', ai: sanitizeAI(d.ai),
+        ai: sanitizeAI(d.ai),
         speed: d.speed, jumpPower: d.jumpPower, gravity: d.gravity,
         hp: d.hp, maxHp: d.maxHp || d.hp, iframe: d.iframe
       });
@@ -3797,20 +4241,21 @@ function deserialize(data) {
         ox: h.ox || 0, oy: h.oy || 0,
         w: Math.max(1, h.w || 1), h: Math.max(1, h.h || 1)
       }));
-      const srcAnim = (d.animations && d.animations.default) || null;
-      const blockAnim = srcAnim ? {
-        frames: (srcAnim.frames || []).map(mkFrame),
-        fps: srcAnim.fps || 8,
-        loop: srcAnim.loop !== false
-      } : emptyAnim();
-
+      const banims = {};
+      for (const k in (d.animations || {})) {
+        const a = d.animations[k] || {};
+        banims[k] = { frames: (a.frames || []).map(mkFrame), fps: a.fps || 8, loop: a.loop !== false };
+      }
+      if (!banims.default) banims.default = emptyAnim();
+      const blockAnim = banims.default;
       const bl = makeBlock({
         id: d.id || uid(), name: d.name,
         x: d.x, y: d.y, w: d.w, h: d.h,
         solid: d.solid, hazard: d.hazard, tex,
         hitboxes,
-        animations: { default: blockAnim }
+        animations: banims
       });
+      bl.techAnim = sanitizeTech(d.techAnim);
       State.items.push(bl);
 
       for (const k in bl.tex) {
@@ -3818,7 +4263,7 @@ function deserialize(data) {
         if (!a) continue;
         track(loadImage(a.url).then(img => { a.img = img; }));
       }
-      for (const f of blockAnim.frames) {
+      for (const k in banims) for (const f of banims[k].frames) {
         track(loadImage(f.url).then(img => { f.img = img; }));
       }
     }
@@ -3914,7 +4359,7 @@ function cloneItem(it) {
       for (const a in v) c.animations[a] = Object.assign({}, v[a], { frames: v[a].frames.map(f => Object.assign({}, f, { hitboxes: (f.hitboxes || []).map(h => Object.assign({}, h)) })) });
     } else if (k === 'tex') {
       c.tex = {}; for (const t in v) c.tex[t] = v[t] ? Object.assign({}, v[t]) : v[t];
-    } else if (k === 'events' || k === 'hitboxes' || k === 'hb' || k === 'shoot' || k === 'ai') c[k] = JSON.parse(JSON.stringify(v));
+    } else if (k === 'events' || k === 'hitboxes' || k === 'hb' || k === 'shoot' || k === 'ai' || k === 'techAnim') c[k] = JSON.parse(JSON.stringify(v));
     else c[k] = v;
   }
   return c;
@@ -4000,7 +4445,7 @@ async function renderSettings() {
   const lines = [
     ['Dự án', meta ? meta.name : '-'], ['Nhân vật / Bot', st.sprites], ['Khối', st.blocks],
     ['Frame ảnh', st.frames + ' (~' + fmtSize(st.bytes) + ')'], ['Hitbox', st.hb], ['Sự kiện', st.events],
-    ['Dung lượng dự án', meta ? fmtSize(meta.size || 0) : '-'], ['Nơi lưu', Store.name()], ['Phiên bản', 'Alpha 8.7.5']
+    ['Dung lượng dự án', meta ? fmtSize(meta.size || 0) : '-'], ['Nơi lưu', Store.name()], ['Phiên bản', 'Alpha 9.0.0']
   ];
   try {
     if (navigator.storage && navigator.storage.estimate) {
@@ -4022,7 +4467,7 @@ async function renderSettings() {
 }
 function mnhrText() {
   const meta = Projects.meta(State.currentProjectId);
-  return JSON.stringify({ mnhr: 1, engine: 'Alpha 8.7.5', name: meta ? meta.name : 'Dự án', savedAt: Date.now(), data: serialize() });
+  return JSON.stringify({ mnhr: 1, engine: 'Alpha 9.0.0', name: meta ? meta.name : 'Dự án', savedAt: Date.now(), data: serialize() });
 }
 function downloadMnhr() {
   try {
@@ -4136,6 +4581,323 @@ function openBgmModal() {
   }
   renderBgmList(); m.classList.add('show');
 }
+/* ============================================================
+   ANIMATION KỸ THUẬT (khối): dữ liệu + menu + preview
+   ============================================================ */
+const TA_EASE = [['linear', 'Đều'], ['out', 'Chậm dần'], ['in', 'Nhanh dần'], ['inout', 'Chậm - nhanh - chậm'], ['back', 'Vọt rồi về'], ['bounce', 'Nảy'], ['elastic', 'Đàn hồi'], ['bezier', 'Tự chỉnh (2 điểm điều khiển)']];
+const TA_PROPS = [['x', 'Vị trí X', 1], ['y', 'Vị trí Y', 1], ['rot', 'Xoay (độ)', 1], ['sx', 'Rộng (nhân)', 0.05], ['sy', 'Cao (nhân)', 0.05], ['alpha', 'Độ mờ (0-1)', 0.05]];
+const TA_ACTIONS = [['shake', 'Rung màn hình'], ['customAnim', 'Phát animation tuỳ chỉnh của khối'], ['signal', 'Gửi tín hiệu (cho nhân vật / khối)'], ['solid', 'Bật/tắt va chạm (rắn)'],
+  ['hazard', 'Bật/tắt gây sát thương'], ['visible', 'Hiện/ẩn khối'], ['var', 'Đổi biến game'], ['startBlock', 'Chạy animation của khối khác'], ['stopAnim', 'Dừng chuỗi này']];
+const taUI = { item: null, t: 0, playing: false, last: 0, sel: null };
+function newTechAnim() {
+  return { enabled: true, trigger: { type: 'start', name: '', button: '', cond: { var: '', op: '>=', value: '1' } }, repeat: 'none', count: 0,
+    once: false, retrigger: 'ignore', space: 'rel', steps: [], rules: [] };
+}
+function newTechStep(ta, it) {
+  const last = ta.steps[ta.steps.length - 1];
+  return { id: 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name: 'Bước ' + (ta.steps.length + 1), dur: 1,
+    after: { ref: last ? last.id : 'start', mode: 'end', delay: 0 },
+    props: { x: { on: true, from: ta.space === 'abs' ? it.x : 0, to: ta.space === 'abs' ? it.x + 100 : 100 } }, ease: 'linear', bez: [0.25, 0.1, 0.25, 1] };
+}
+function sanitizeTech(t) {
+  if (!t || typeof t !== 'object') return null;
+  const num = (v, d) => isFinite(+v) ? +v : d;
+  const out = newTechAnim(), tg = t.trigger || {};
+  out.enabled = t.enabled !== false;
+  out.trigger = { type: ['start', 'touch', 'signal', 'button', 'var'].indexOf(tg.type) >= 0 ? tg.type : 'start', name: String(tg.name || ''), button: String(tg.button || ''),
+    cond: { var: String((tg.cond && tg.cond.var) || ''), op: String((tg.cond && tg.cond.op) || '>='), value: String(tg.cond && tg.cond.value != null ? tg.cond.value : '1') } };
+  out.repeat = ['none', 'loop', 'pingpong'].indexOf(t.repeat) >= 0 ? t.repeat : 'none';
+  out.count = Math.max(0, Math.round(num(t.count, 0)));
+  out.once = !!t.once; out.retrigger = t.retrigger === 'restart' ? 'restart' : 'ignore'; out.space = t.space === 'abs' ? 'abs' : 'rel';
+  const ids = {};
+  out.steps = (Array.isArray(t.steps) ? t.steps : []).map((st, i) => {
+    let id = String((st && st.id) || ('s' + i)); while (ids[id]) id += '_'; ids[id] = 1;
+    const props = {};
+    ['x', 'y', 'rot', 'sx', 'sy', 'alpha'].forEach(k => {
+      const p = st && st.props && st.props[k];
+      if (p && p.on) props[k] = { on: true, from: (p.from === null || p.from === undefined || p.from === '') ? null : num(p.from, 0), to: num(p.to, 0) };
+    });
+    const a = (st && st.after) || {};
+    return { id, name: String((st && st.name) || ('Bước ' + (i + 1))), dur: Math.max(0, num(st && st.dur, 1)),
+      after: { ref: a.ref ? String(a.ref) : 'start', mode: a.mode === 'start' ? 'start' : 'end', delay: Math.max(0, num(a.delay, 0)) },
+      props, ease: TA_EASE.some(e => e[0] === (st && st.ease)) ? st.ease : 'linear',
+      bez: (st && Array.isArray(st.bez) && st.bez.length === 4) ? st.bez.map(v => num(v, 0)) : [0.25, 0.1, 0.25, 1] };
+  });
+  out.rules = (Array.isArray(t.rules) ? t.rules : []).map((r, i) => ({ id: String((r && r.id) || ('r' + i)), step: String((r && r.step) || ''),
+    when: (r && r.when === 'start') ? 'start' : 'end', delay: Math.max(0, num(r && r.delay, 0)), action: String((r && r.action) || 'shake'), params: Object.assign({}, (r && r.params) || {}) }));
+  return out;
+}
+function taTotal() { return Math.max(0.01, RT.techSchedule(taUI.item.techAnim).total); }
+function taStep(id) { return taUI.item.techAnim.steps.find(x => x.id === id) || null; }
+
+function taDraw() {
+  const cv = document.getElementById('taPrev'); if (!cv || !taUI.item) return;
+  const it = taUI.item, ta = it.techAnim, g = cv.getContext('2d');
+  const sched = RT.techSchedule(ta), T = Math.max(0.01, sched.total);
+  let x0 = it.x - it.w / 2, y0 = it.y - it.h / 2, x1 = it.x + it.w / 2, y1 = it.y + it.h / 2;
+  const path = [];
+  for (let i = 0; i <= 60; i++) {
+    const xf = RT.evalTech(it, ta, T * i / 60, sched);
+    path.push([it.x + xf.dx, it.y + xf.dy]);
+    for (const b of RT.blockBoxes(it, xf)) { x0 = Math.min(x0, b.x); y0 = Math.min(y0, b.y); x1 = Math.max(x1, b.x + b.w); y1 = Math.max(y1, b.y + b.h); }
+  }
+  const mx = Math.max(40, (x1 - x0) * 0.15), my = Math.max(40, (y1 - y0) * 0.15);
+  x0 -= mx; x1 += mx; y0 -= my; y1 += my;
+  const W = cv.width, H = cv.height, sc = Math.min(W / (x1 - x0), H / (y1 - y0));
+  const ox = (W - (x1 - x0) * sc) / 2 - x0 * sc, oy = (H - (y1 - y0) * sc) / 2 - y0 * sc;
+  g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = '#0f1115'; g.fillRect(0, 0, W, H);
+  g.setTransform(sc, 0, 0, sc, ox, oy);
+  g.strokeStyle = 'rgba(255,255,255,.06)'; g.lineWidth = 1 / sc; g.beginPath();
+  for (let x = Math.floor(x0 / 50) * 50; x <= x1; x += 50) { g.moveTo(x, y0); g.lineTo(x, y1); }
+  for (let y = Math.floor(y0 / 50) * 50; y <= y1; y += 50) { g.moveTo(x0, y); g.lineTo(x1, y); }
+  g.stroke();
+  for (const o of State.items) {
+    if (o === it) continue;
+    g.fillStyle = o.kind === 'block' ? 'rgba(130,140,160,.28)' : 'rgba(111,168,90,.35)';
+    g.fillRect(o.x - o.w / 2, o.y - o.h / 2, o.w, o.h);
+  }
+  g.setLineDash([6 / sc, 5 / sc]); g.strokeStyle = 'rgba(255,184,107,.85)'; g.lineWidth = 1.5 / sc; g.beginPath();
+  path.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.stroke(); g.setLineDash([]);
+  g.font = (11 / sc) + 'px sans-serif';
+  ta.steps.forEach((st, i) => {
+    const a = RT.evalTech(it, ta, sched.S[st.id], sched), b2 = RT.evalTech(it, ta, sched.S[st.id] + st.dur, sched);
+    [[a, 'A', '#7fbf63'], [b2, 'B', '#e0a030']].forEach(m => {
+      g.fillStyle = m[2]; g.beginPath(); g.arc(it.x + m[0].dx, it.y + m[0].dy, 4 / sc, 0, 7); g.fill();
+      g.fillText((i + 1) + m[1], it.x + m[0].dx + 6 / sc, it.y + m[0].dy - 6 / sc);
+    });
+  });
+  const xf = RT.evalTech(it, ta, taUI.t, sched);
+  g.save(); g.globalAlpha = xf.alpha; g.translate(it.x + xf.dx, it.y + xf.dy); g.rotate(xf.rot); g.scale(xf.sx, xf.sy);
+  const fr = it.animations && it.animations.default && it.animations.default.frames[0];
+  const img = (fr && fr.img) || (it.tex && it.tex.all && it.tex.all.img);
+  if (img && img.complete !== false) g.drawImage(img, -it.w / 2, -it.h / 2, it.w, it.h);
+  else { g.fillStyle = '#6c7a99'; g.fillRect(-it.w / 2, -it.h / 2, it.w, it.h); }
+  g.restore();
+  g.strokeStyle = '#7fbf63'; g.lineWidth = 1.5 / sc;
+  for (const b of RT.blockBoxes(it, xf)) {
+    const p = b.poly || [[b.x, b.y], [b.x + b.w, b.y], [b.x + b.w, b.y + b.h], [b.x, b.y + b.h]];
+    g.beginPath(); p.forEach((q, i) => i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1])); g.closePath(); g.stroke();
+  }
+  g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = '#fff'; g.font = '13px sans-serif';
+  g.fillText('t = ' + taUI.t.toFixed(2) + 's / ' + T.toFixed(2) + 's   (khung xanh = hitbox)', 8, 16);
+}
+function taLoop(ts) {
+  const m = document.getElementById('taModal');
+  if (!taUI.playing || !m || !m.classList.contains('show')) { taUI.playing = false; return; }
+  const dt = Math.min(0.1, (ts - taUI.last) / 1000); taUI.last = ts;
+  const T = taTotal(); taUI.t += dt; if (taUI.t > T) taUI.t = 0;
+  const sk = document.getElementById('taSeek'); if (sk) sk.value = String(Math.round(taUI.t / T * 1000));
+  taDraw(); requestAnimationFrame(taLoop);
+}
+function taCurve(cv, st) {
+  const g = cv.getContext('2d'), W = cv.width, H = cv.height;
+  g.fillStyle = '#0f1115'; g.fillRect(0, 0, W, H);
+  g.strokeStyle = 'rgba(255,255,255,.15)'; g.strokeRect(10, 10, W - 20, H - 20);
+  g.strokeStyle = '#e0a030'; g.lineWidth = 2; g.beginPath();
+  for (let i = 0; i <= 60; i++) {
+    const u = i / 60, v = RT.easeFn(st, u), x = 10 + u * (W - 20), y = H - 10 - Math.max(-0.5, Math.min(1.5, v)) * (H - 20);
+    i ? g.lineTo(x, y) : g.moveTo(x, y);
+  }
+  g.stroke();
+}
+function taDefaultTo(key, ta, it) {
+  if (key === 'x') return ta.space === 'abs' ? it.x + 100 : 100;
+  if (key === 'y') return ta.space === 'abs' ? it.y - 100 : -100;
+  if (key === 'rot') return 90;
+  if (key === 'alpha') return 0;
+  return 1;
+}
+function taStepForm(st, ta, it, box) {
+  const order = ta.steps.indexOf(st);
+  box.appendChild(row('Tên', textInput(st.name, v => { st.name = v; taRefreshList(); })));
+  box.appendChild(row('Thời gian chạy (s)', numInput(st.dur, v => { st.dur = Math.max(0, v); taRefreshAll(); }, 0.1, 0)));
+  const others = ta.steps.filter(x => x !== st).map(x => [x.id, x.name]);
+  box.appendChild(row('Bắt đầu', selectInput(st.after.ref, [['start', 'Lúc kích hoạt chuỗi']].concat(others), v => { st.after.ref = v; taRender(); })));
+  if (st.after.ref !== 'start') box.appendChild(row('…khi bước đó', selectInput(st.after.mode, [['end', 'KẾT THÚC'], ['start', 'BẮT ĐẦU']], v => { st.after.mode = v; taRefreshAll(); })));
+  box.appendChild(row('Sau thêm (giây)', numInput(st.after.delay, v => { st.after.delay = Math.max(0, v); taRefreshAll(); }, 0.1, 0)));
+  box.appendChild(el('div', 'ev-hint', 'Thuộc tính cần đổi: tích để bật. "Từ" để trống = tiếp nối giá trị hiện tại.' + (ta.space === 'abs' ? ' (Toạ độ tuyệt đối)' : ' (Cộng thêm vào vị trí khối)')));
+  TA_PROPS.forEach(pp => {
+    const key = pp[0], p = st.props[key];
+    const r = el('div', 'row'); r.appendChild(el('span', null, pp[1]));
+    const w = el('div'); w.style.cssText = 'display:flex;gap:4px;align-items:center;';
+    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !!(p && p.on); cb.style.cssText = 'width:18px;height:18px;';
+    cb.onchange = () => {
+      if (cb.checked) { st.props[key] = st.props[key] || { on: true, from: null, to: taDefaultTo(key, ta, it) }; st.props[key].on = true; }
+      else if (st.props[key]) delete st.props[key];
+      taRender(); scheduleSave();
+    };
+    w.appendChild(cb);
+    if (p && p.on) {
+      const fr = document.createElement('input'); fr.type = 'text'; fr.className = 'inp'; fr.placeholder = 'tiếp nối'; fr.style.width = '78px';
+      fr.value = p.from != null ? String(p.from) : '';
+      fr.oninput = () => { p.from = (fr.value.trim() === '' || !isFinite(+fr.value)) ? null : +fr.value; taRefreshAll(); scheduleSave(); };
+      const to = document.createElement('input'); to.type = 'number'; to.className = 'inp'; to.step = String(pp[2]); to.style.width = '78px'; to.value = p.to;
+      to.oninput = () => { p.to = isFinite(parseFloat(to.value)) ? parseFloat(to.value) : 0; taRefreshAll(); scheduleSave(); };
+      w.appendChild(el('span', null, 'từ')); w.appendChild(fr); w.appendChild(el('span', null, 'đến')); w.appendChild(to);
+    }
+    r.appendChild(w); box.appendChild(r);
+  });
+  box.appendChild(row('Đường cong', selectInput(st.ease, TA_EASE, v => { st.ease = v; taRender(); })));
+  if (st.ease === 'bezier') {
+    ['x1', 'y1', 'x2', 'y2'].forEach((lb, i) => box.appendChild(row('Điểm ' + lb, numInput(st.bez[i], v => { st.bez[i] = (i % 2 === 0) ? Math.max(0, Math.min(1, v)) : v; taCurveRefresh(st); taDraw(); }, 0.05))));
+  }
+  const cv = document.createElement('canvas'); cv.width = 240; cv.height = 110; cv.id = 'taCurve'; cv.style.cssText = 'width:240px;max-width:100%;display:block;margin:4px 0;';
+  box.appendChild(cv); taCurve(cv, st);
+  const bar = el('div'); bar.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;margin:6px 0;';
+  const up = el('button', 'btn-mini', 'Lên'); up.onclick = () => { if (order > 0) { ta.steps.splice(order, 1); ta.steps.splice(order - 1, 0, st); taRender(); scheduleSave(); } };
+  const dn = el('button', 'btn-mini', 'Xuống'); dn.onclick = () => { if (order < ta.steps.length - 1) { ta.steps.splice(order, 1); ta.steps.splice(order + 1, 0, st); taRender(); scheduleSave(); } };
+  const dp = el('button', 'btn-mini', 'Nhân bản');
+  dp.onclick = () => { const c = JSON.parse(JSON.stringify(st)); c.id = 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5); c.name = st.name + ' (copy)'; ta.steps.splice(order + 1, 0, c); taUI.sel = c.id; taRender(); scheduleSave(); };
+  const dl = el('button', 'btn-mini danger', 'Xoá bước');
+  dl.onclick = () => {
+    if (!confirm('Xoá "' + st.name + '"? Các bước/hành động nối vào nó sẽ bị gỡ liên kết.')) return;
+    ta.steps.splice(order, 1);
+    ta.steps.forEach(x => { if (x.after.ref === st.id) x.after.ref = 'start'; });
+    ta.rules = ta.rules.filter(r => r.step !== st.id);
+    taUI.sel = ta.steps[0] ? ta.steps[0].id : null; taRender(); scheduleSave();
+  };
+  [up, dn, dp, dl].forEach(b => bar.appendChild(b)); box.appendChild(bar);
+}
+function taCurveRefresh(st) { const cv = document.getElementById('taCurve'); if (cv) taCurve(cv, st); }
+function taRuleParams(r, ta, it, box) {
+  const p = r.params;
+  switch (r.action) {
+    case 'shake':
+      if (p.level == null) p.level = 5; if (p.dur == null) p.dur = 0.5;
+      box.appendChild(row('Cấp độ (1-10)', numInput(p.level, v => p.level = Math.max(1, Math.min(10, v)), 1, 1, 10)));
+      box.appendChild(row('Thời gian (s)', numInput(p.dur, v => p.dur = Math.max(0.1, v), 0.1, 0.1)));
+      break;
+    case 'customAnim': {
+      const names = Object.keys(it.animations).filter(k => k.indexOf('custom:') === 0).map(k => [k.slice(7), k.slice(7)]);
+      if (!p.mode) p.mode = 'once';
+      if (!names.length) box.appendChild(el('div', 'ev-hint', 'Khối chưa có animation tuỳ chỉnh (tạo ở Inspector của khối).'));
+      else { if (!names.some(n => n[0] === p.name)) p.name = names[0][0]; box.appendChild(row('Animation', selectInput(p.name, names, v => p.name = v))); }
+      box.appendChild(row('Kiểu', selectInput(p.mode, [['once', 'Chạy 1 lần'], ['loop', 'Lặp'], ['stop', 'Dừng']], v => p.mode = v)));
+      break;
+    }
+    case 'signal':
+      box.appendChild(row('Tên tín hiệu', textInput(p.name || '', v => p.name = v.replace(/[^A-Za-z0-9_]/g, ''))));
+      box.appendChild(row('Gửi cho', selectInput(p.to || 'all', [['all', 'Tất cả']].concat(targetOptions(false)), v => p.to = v)));
+      break;
+    case 'solid': case 'hazard': case 'visible':
+      if (!p.value) p.value = 'off';
+      box.appendChild(row('Giá trị', selectInput(p.value, [['on', 'Bật'], ['off', 'Tắt'], ['toggle', 'Đảo']], v => p.value = v)));
+      break;
+    case 'var': {
+      const names = (State.varDefs || []).map(d => [d.name, d.name]);
+      box.appendChild(row('Biến', names.length ? selectInput(p.name || names[0][0], names, v => p.name = v) : textInput(p.name || '', v => p.name = v)));
+      if (names.length && !p.name) p.name = names[0][0];
+      box.appendChild(row('Kiểu', selectInput(p.mode || 'set', [['set', 'Gán ='], ['add', 'Cộng +']], v => p.mode = v)));
+      box.appendChild(row('Giá trị', textInput(p.value != null ? p.value : '1', v => p.value = v)));
+      break;
+    }
+    case 'startBlock': {
+      const bl = State.items.filter(x => x.kind === 'block' && x !== it).map(x => [x.id, x.name]);
+      if (!bl.length) box.appendChild(el('div', 'ev-hint', 'Chưa có khối nào khác.'));
+      else { if (!bl.some(b => b[0] === p.target)) p.target = bl[0][0]; box.appendChild(row('Khối', selectInput(p.target, bl, v => p.target = v))); }
+      break;
+    }
+  }
+}
+function taRefreshList() { if (taUI.item) taRender(); }
+function taRefreshAll() { taDraw(); const inf = document.getElementById('taInfo'); if (inf) taInfo(inf); const sk = document.getElementById('taSeek'); if (sk) sk.max = '1000'; }
+function taInfo(box) {
+  const ta = taUI.item.techAnim, sc = RT.techSchedule(ta), warn = [];
+  if (sc.cyc) warn.push('Có bước nối vòng tròn (A chờ B, B chờ A) — hãy đổi lại.');
+  ta.steps.forEach(st => {
+    if (st.after.ref !== 'start' && !ta.steps.some(x => x.id === st.after.ref)) warn.push('"' + st.name + '" nối vào bước không tồn tại.');
+    if (!Object.keys(st.props).length) warn.push('"' + st.name + '" chưa chọn thuộc tính nào để đổi.');
+  });
+  ta.rules.forEach((r, i) => { if (!ta.steps.some(x => x.id === r.step)) warn.push('Hành động #' + (i + 1) + ' trỏ tới bước không tồn tại.'); });
+  box.textContent = 'Tổng thời gian chuỗi: ' + sc.total.toFixed(2) + 's' + (warn.length ? ' · CẢNH BÁO: ' + warn.join(' ') : '');
+  box.style.color = warn.length ? '#e08a4c' : '';
+}
+function taRender() {
+  const it = taUI.item, ta = it.techAnim, body = document.getElementById('taBody');
+  if (!body) return;
+  body.innerHTML = '';
+  const add = (n) => body.appendChild(n);
+  add(sectionHeader('Kích hoạt chuỗi'));
+  add(row('Bật animation', checkbox(ta.enabled, v => ta.enabled = v)));
+  add(row('Kiểu kích hoạt', selectInput(ta.trigger.type, [['start', 'Khi bắt đầu game'], ['touch', 'Khi người chơi chạm khối'], ['signal', 'Khi nhận tín hiệu'], ['button', 'Khi nhấn nút UI'], ['var', 'Khi biến thoả điều kiện']], v => { ta.trigger.type = v; taRender(); })));
+  if (ta.trigger.type === 'signal') add(row('Tên tín hiệu', textInput(ta.trigger.name, v => ta.trigger.name = v.replace(/[^A-Za-z0-9_]/g, ''))));
+  if (ta.trigger.type === 'button') {
+    const btns = State.ui.buttons || [];
+    if (!btns.length) add(el('div', 'ev-hint', 'Chưa có nút tuỳ chỉnh. Tạo ở tab UI.'));
+    else { if (!btns.some(b => b.id === ta.trigger.button)) ta.trigger.button = btns[0].id; add(row('Nút', selectInput(ta.trigger.button, btns.map(b => [b.id, (b.label || 'Nút') + ' (' + b.key + ')']), v => ta.trigger.button = v))); }
+  }
+  if (ta.trigger.type === 'var') {
+    const names = (State.varDefs || []).map(d => [d.name, d.name]);
+    add(row('Biến', names.length ? selectInput(ta.trigger.cond.var || names[0][0], names, v => ta.trigger.cond.var = v) : textInput(ta.trigger.cond.var, v => ta.trigger.cond.var = v)));
+    if (names.length && !ta.trigger.cond.var) ta.trigger.cond.var = names[0][0];
+    add(row('Điều kiện', selectInput(ta.trigger.cond.op, [['==', '='], ['!=', '≠'], ['>', '>'], ['>=', '≥'], ['<', '<'], ['<=', '≤']], v => ta.trigger.cond.op = v)));
+    add(row('Giá trị', textInput(ta.trigger.cond.value, v => ta.trigger.cond.value = v)));
+  }
+  add(row('Chỉ chạy 1 lần', checkbox(ta.once, v => ta.once = v)));
+  add(row('Nếu kích hoạt lại', selectInput(ta.retrigger, [['ignore', 'Bỏ qua khi đang chạy'], ['restart', 'Chạy lại từ đầu']], v => ta.retrigger = v)));
+  add(sectionHeader('Lặp & toạ độ'));
+  add(row('Lặp', selectInput(ta.repeat, [['none', 'Chạy 1 lần'], ['loop', 'Lặp lại'], ['pingpong', 'Đi rồi quay về (ping-pong)']], v => { ta.repeat = v; taRender(); })));
+  if (ta.repeat !== 'none') add(row('Số lần (0 = vô hạn)', numInput(ta.count, v => ta.count = Math.max(0, Math.round(v)), 1, 0)));
+  add(row('Toạ độ', selectInput(ta.space, [['rel', 'Tương đối (cộng vào vị trí khối)'], ['abs', 'Tuyệt đối (toạ độ thế giới)']], v => {
+    if (v !== ta.space) {   // đổi hệ toạ độ: quy đổi các giá trị X, Y đã nhập
+      const k = v === 'abs' ? 1 : -1;
+      ta.steps.forEach(st => { ['x', 'y'].forEach(ax => { const p = st.props[ax]; if (!p) return; const off = ax === 'x' ? it.x : it.y; if (p.from != null) p.from += k * off; p.to += k * off; }); });
+      ta.space = v; taRender(); taDraw();
+    }
+  })));
+  add(sectionHeader('Các bước animation (' + ta.steps.length + ')'));
+  const sc = RT.techSchedule(ta);
+  ta.steps.forEach((st, i) => {
+    const c = el('div'); c.style.cssText = 'border:1px solid ' + (taUI.sel === st.id ? '#e0a030' : '#2e3648') + ';padding:6px;margin-bottom:4px;cursor:pointer;';
+    c.textContent = (i + 1) + '. ' + st.name + ' · bắt đầu ' + sc.S[st.id].toFixed(2) + 's · dài ' + st.dur + 's';
+    c.onclick = () => { taUI.sel = st.id; taRender(); };
+    add(c);
+  });
+  const addS = el('button', 'btn accent full', '＋ Thêm bước');
+  addS.onclick = () => { const st = newTechStep(ta, it); ta.steps.push(st); taUI.sel = st.id; taRender(); scheduleSave(); };
+  add(addS);
+  const cur = taStep(taUI.sel) || ta.steps[0];
+  if (cur) { taUI.sel = cur.id; const box = el('div'); box.style.cssText = 'border:1px solid #e0a030;padding:8px;margin:6px 0;'; box.appendChild(sectionHeader('Chỉnh: ' + cur.name)); taStepForm(cur, ta, it, box); add(box); }
+  add(sectionHeader('Biến / Hành động theo bước'));
+  ta.rules.forEach((r, i) => {
+    const c = el('div'); c.style.cssText = 'border:1px solid #2e3648;padding:6px;margin-bottom:6px;';
+    c.appendChild(row('Khi bước', selectInput(r.step, ta.steps.map(x => [x.id, x.name]), v => { r.step = v; taRefreshAll(); })));
+    c.appendChild(row('Thời điểm', selectInput(r.when, [['end', 'KẾT THÚC'], ['start', 'BẮT ĐẦU']], v => { r.when = v; taRefreshAll(); })));
+    c.appendChild(row('Sau thêm (giây)', numInput(r.delay, v => { r.delay = Math.max(0, v); taRefreshAll(); }, 0.1, 0)));
+    c.appendChild(row('Thì', selectInput(r.action, TA_ACTIONS, v => { r.action = v; r.params = {}; taRender(); })));
+    taRuleParams(r, ta, it, c);
+    const dl = el('button', 'btn-mini danger', 'Xoá hành động'); dl.onclick = () => { ta.rules.splice(i, 1); taRender(); scheduleSave(); };
+    c.appendChild(dl); add(c);
+  });
+  const addR = el('button', 'btn full', '＋ Thêm hành động');
+  addR.onclick = () => { if (!ta.steps.length) { toast('Hãy tạo ít nhất 1 bước trước', 'err'); return; } ta.rules.push({ id: 'r' + Date.now().toString(36), step: (taStep(taUI.sel) || ta.steps[0]).id, when: 'end', delay: 0, action: 'shake', params: { level: 5, dur: 0.5 } }); taRender(); scheduleSave(); };
+  add(addR);
+  const inf = el('div', 'ev-hint'); inf.id = 'taInfo'; add(inf); taInfo(inf);
+  const sk = document.getElementById('taSeek'); if (sk) sk.value = String(Math.round(Math.min(1, taUI.t / taTotal()) * 1000));
+  taDraw();
+}
+function openTechModal(item) {
+  if (!item.techAnim) item.techAnim = newTechAnim();
+  taUI.item = item; taUI.t = 0; taUI.playing = false; taUI.sel = item.techAnim.steps[0] ? item.techAnim.steps[0].id : null;
+  let m = document.getElementById('taModal');
+  if (!m) {
+    m = document.createElement('div'); m.id = 'taModal'; m.className = 'modal';
+    m.innerHTML = '<div class="modal-box" style="max-width:760px;max-height:94vh;overflow:auto;"><h3>Animation Kỹ Thuật</h3>' +
+      '<div style="position:sticky;top:0;z-index:3;background:#14161c;padding-bottom:6px;"><canvas id="taPrev" width="720" height="300" style="width:100%;display:block;"></canvas>' +
+      '<div style="display:flex;gap:8px;align-items:center;margin-top:6px;"><button id="taPlay" class="btn primary">Phát</button><input id="taSeek" type="range" min="0" max="1000" value="0" style="flex:1;"></div></div>' +
+      '<div id="taBody"></div><div class="modal-actions"><button id="btnTaClose" class="btn primary">Xong</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById('btnTaClose').onclick = () => { taUI.playing = false; m.classList.remove('show'); renderInspector(); };
+    document.getElementById('taPlay').onclick = () => {
+      taUI.playing = !taUI.playing; document.getElementById('taPlay').textContent = taUI.playing ? 'Dừng' : 'Phát';
+      if (taUI.playing) { taUI.last = performance.now(); requestAnimationFrame(taLoop); }
+    };
+    document.getElementById('taSeek').oninput = (e) => { taUI.playing = false; document.getElementById('taPlay').textContent = 'Phát'; taUI.t = taTotal() * (+e.target.value) / 1000; taDraw(); };
+  }
+  document.getElementById('taPlay').textContent = 'Phát';
+  taRender(); m.classList.add('show');
+}
+
 function openProjectsModal() {
   const modal = document.getElementById('projectModal');
   const listEl = document.getElementById('projectList');
@@ -4354,7 +5116,7 @@ const Exporter = (function () {
     L.push('      botRange:d.botRange!=null?d.botRange:150,');
     L.push('      botPatrol:d.botPatrol!=null?d.botPatrol:80,');
     L.push('      noPush:!!d.noPush,');
-    L.push('      hbMode:d.hbMode||"frame", ai:d.ai||{},');
+    L.push('      ai:d.ai||{},');
     L.push('      speed:d.speed, jumpPower:d.jumpPower, gravity:d.gravity,');
     L.push('      hp:d.hp, maxHp:d.maxHp||d.hp, iframe:d.iframe,');
     L.push('      _vx:0,_vy:0,_onGround:false,_facing:1,_state:"idle",_invuln:0,_dead:false,');
@@ -4367,15 +5129,14 @@ const Exporter = (function () {
     L.push('  } else {');
     L.push('    var tex = {};');
     L.push('    for (var k2 in d.tex) tex[k2] = d.tex[k2] ? {url:d.tex[k2].url, img:null} : null;');
-    L.push('    var blAnimSrc = (d.animations && d.animations.default) || null;');
-    L.push('    var blAnim = blAnimSrc ? { fps: blAnimSrc.fps||8, loop: blAnimSrc.loop!==false,');
-    L.push('      frames: (blAnimSrc.frames||[]).map(MF) }');
-    L.push('      : { frames: [], fps: 8, loop: true };');
+    L.push('    var blAnims = {};');
+    L.push('    for (var ak in (d.animations||{})) { var sa = d.animations[ak] || {}; blAnims[ak] = { fps: sa.fps||8, loop: sa.loop!==false, frames: (sa.frames||[]).map(MF) }; }');
+    L.push('    if (!blAnims.default) blAnims.default = { frames: [], fps: 8, loop: true };');
     L.push('    var blHitboxes = (d.hitboxes||[]).map(function(h){return {ox:h.ox,oy:h.oy,w:h.w,h:h.h};});');
     L.push('    state.items.push({kind:"block", id:d.id, name:d.name,');
     L.push('      x:d.x, y:d.y, w:d.w, h:d.h, solid:d.solid, hazard:d.hazard, tex:tex,');
     L.push('      hitboxes: blHitboxes,');
-    L.push('      animations: { default: blAnim },');
+    L.push('      animations: blAnims, techAnim: d.techAnim || null,');
     L.push('      _animFrame:0, _animTime:0});');
     L.push('  }');
     L.push('});');
@@ -4392,8 +5153,7 @@ const Exporter = (function () {
     L.push('    } else {');
     L.push('      for (var k2 in it.tex) { if(!it.tex[k2]) continue; total++;');
     L.push('        (function(a){ loadImg(a.url,function(img){ a.img=img; tick(); }); })(it.tex[k2]); }');
-    L.push('      var ba = it.animations && it.animations.default;');
-    L.push('      if (ba) ba.frames.forEach(function(f){ total++; loadImg(f.url,function(img){ f.img=img; tick(); }); });');
+    L.push('      for (var ak3 in it.animations) { (function(an3){ an3.frames.forEach(function(f){ total++; loadImg(f.url,function(img){ f.img=img; tick(); }); }); })(it.animations[ak3]); }');
     L.push('    }');
     L.push('  });');
     L.push('  if (total===0) cb();');
@@ -4468,6 +5228,7 @@ const Exporter = (function () {
     L.push('  if (dt > 0.05) dt = 0.05; if (dt < 0) dt = 0;');
     L.push('  if (!state.showMenu) {');
     L.push('    state.time += dt;');
+    L.push('    RT.updateTechAnims(state, dt);');
     L.push('    if (customControl) { try { customControl(state, state.keys, dt, RT, VW, VH); } catch(e){} }');
     L.push('    for (var i=0;i<state.items.length;i++){');
     L.push('      var it = state.items[i];');
@@ -4760,11 +5521,11 @@ async function init() {
   /* HITBOX MODAL */
   document.getElementById('btnHitboxAuto').onclick = hbAutoDetect;
   document.getElementById('btnHitboxFull').onclick = () => {
-    hitboxState.boxes = [{ x: 0, y: 0, w: hitboxState.W, h: hitboxState.H }]; hitboxState.frameSets = new Map();
+    hbReplace([{ x: 0, y: 0, w: hitboxState.W, h: hitboxState.H }]);
     redrawHitboxCanvas(); renderHitboxList(); updateHitboxInfo();
   };
   document.getElementById('btnHitboxClear').onclick = () => {
-    hitboxState.boxes = []; hitboxState.frameSets = new Map();
+    hbReplace([]);
     redrawHitboxCanvas(); renderHitboxList(); updateHitboxInfo();
   };
   document.getElementById('btnHitboxCancel').onclick = closeHitboxModal;
@@ -4839,7 +5600,7 @@ async function init() {
   await loadProject(meta);
   updateCamInfo();
   requestAnimationFrame(loop);
-  toast('MNHR-engine Alpha 8.7.5 · lưu trữ: ' + Store.name(), 'ok', 2800);
+  toast('MNHR-engine Alpha 9.0.0 · lưu trữ: ' + Store.name(), 'ok', 2800);
 }
 
 return {
