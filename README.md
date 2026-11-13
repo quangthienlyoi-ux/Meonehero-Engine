@@ -25,6 +25,10 @@
 
 - Logs Alpha 8.7.5 (7/11/2026)
 
+- Logs Alpha 9.0.0 (13/11/2026)
+
+- BETA X.X (XX/XX/2026) ?
+
 ---
 
 - Use MNHR-engine Online in [MNHR-Engine Online](https://quangthienlyoi-ux.github.io/Meonehero-Engine/)
