@@ -1,5 +1,5 @@
 /* ============================================================
-   MNHR-engine — engine.js Alpha 9.0.0
+   MNHR-engine — engine.js Alpha 9.0.1
    Auto-detect đa frame + Hệ thống Biến (Events)
    ============================================================ */
 window.MNHR = (function () {
@@ -624,7 +624,10 @@ function MiniRuntime() {
       if (b.kind !== 'block' || !b.techAnim || !b.techAnim.enabled || !b.techAnim.steps || !b.techAnim.steps.length) continue;
       const ta = b.techAnim, R = techState(b), tg = ta.trigger || { type: 'start' };
       let fire = false;
-      if (tg.type === 'start') { if (!R.init) { R.init = true; fire = true; } }
+      if (tg.type === 'start') {   // có thể trễ N giây kể từ khi bấm chạy game
+        R.clock = (R.clock || 0) + dt;
+        if (!R.init && R.clock >= Math.max(0, +tg.delay || 0)) { R.init = true; fire = true; }
+      }
       else if (tg.type === 'touch') {
         const bb = getHitboxes(b).map(x => ({ x: x.x - 3, y: x.y - 3, w: x.w + 6, h: x.h + 6, poly: x.poly }));
         let touching = false;
@@ -660,18 +663,21 @@ function MiniRuntime() {
       if (ft != null) { techRules(state, b, ta, sched, R.prevT, ft); R.prevT = ft; }
       else { techRules(state, b, ta, sched, R.prevT, T); R.prevT = T; }
       if (finished) { techRules(state, b, ta, sched, R.prevT, T); R.running = false; }
-      // chở nhân vật đứng trên khối đặc đang di chuyển (không xoay)
-      if (b.solid && !xf.rot && !(oldXf && oldXf.rot)) {
+      // chở nhân vật đứng trên khối đặc (tắt được bằng ta.carry), kể cả khi khối đang xoay
+      if (b.solid && ta.carry !== false) {
+        const dRot = xf.rot - (oldXf ? oldXf.rot : 0);
         const ddx = xf.dx - (oldXf ? oldXf.dx : 0), ddy = xf.dy - (oldXf ? oldXf.dy : 0);
-        if (ddx || ddy) {
+        if (ddx || ddy || dRot) {
+          const ocx = b.x + (oldXf ? oldXf.dx : 0), ocy = b.y + (oldXf ? oldXf.dy : 0), ncx = b.x + xf.dx, ncy = b.y + xf.dy;
+          const cd = Math.cos(dRot), sd = Math.sin(dRot);
           for (const s of state.items) {
             if (s.kind !== 'sprite' || s._dead || !s._onGround) continue;
-            let fx0 = Infinity, fx1 = -Infinity, feet = -Infinity;
-            for (const q of bodyBoxes(s)) { fx0 = Math.min(fx0, q.x); fx1 = Math.max(fx1, q.x + q.w); feet = Math.max(feet, q.y + q.h); }
-            for (const ob of old) {
-              if (ob.poly) continue;
-              if (fx1 > ob.x + 1 && fx0 < ob.x + ob.w - 1 && Math.abs(feet - ob.y) <= 3) { s.x += ddx; s.y += ddy; break; }
-            }
+            const sb = bodyBoxes(s);
+            if (anyHitboxOverlap(sb, old)) continue;
+            const low = sb.map(q => ({ x: q.x, y: q.y + 3, w: q.w, h: q.h }));
+            if (!anyHitboxOverlap(low, old)) continue;
+            const rx = s.x - ocx, ry = s.y - ocy;
+            s.x = ncx + rx * cd - ry * sd; s.y = ncy + rx * sd + ry * cd;
           }
         }
       }
@@ -4445,7 +4451,7 @@ async function renderSettings() {
   const lines = [
     ['Dự án', meta ? meta.name : '-'], ['Nhân vật / Bot', st.sprites], ['Khối', st.blocks],
     ['Frame ảnh', st.frames + ' (~' + fmtSize(st.bytes) + ')'], ['Hitbox', st.hb], ['Sự kiện', st.events],
-    ['Dung lượng dự án', meta ? fmtSize(meta.size || 0) : '-'], ['Nơi lưu', Store.name()], ['Phiên bản', 'Alpha 9.0.0']
+    ['Dung lượng dự án', meta ? fmtSize(meta.size || 0) : '-'], ['Nơi lưu', Store.name()], ['Phiên bản', 'Alpha 9.0.1']
   ];
   try {
     if (navigator.storage && navigator.storage.estimate) {
@@ -4467,7 +4473,7 @@ async function renderSettings() {
 }
 function mnhrText() {
   const meta = Projects.meta(State.currentProjectId);
-  return JSON.stringify({ mnhr: 1, engine: 'Alpha 9.0.0', name: meta ? meta.name : 'Dự án', savedAt: Date.now(), data: serialize() });
+  return JSON.stringify({ mnhr: 1, engine: 'Alpha 9.0.1', name: meta ? meta.name : 'Dự án', savedAt: Date.now(), data: serialize() });
 }
 function downloadMnhr() {
   try {
@@ -4587,20 +4593,30 @@ function openBgmModal() {
 const TA_EASE = [['linear', 'Đều'], ['out', 'Chậm dần'], ['in', 'Nhanh dần'], ['inout', 'Chậm - nhanh - chậm'], ['back', 'Vọt rồi về'], ['bounce', 'Nảy'], ['elastic', 'Đàn hồi'], ['bezier', 'Tự chỉnh (2 điểm điều khiển)']];
 const TA_PROPS = [['x', 'Vị trí X', 1], ['y', 'Vị trí Y', 1], ['rot', 'Xoay (độ)', 1], ['sx', 'Rộng (nhân)', 0.05], ['sy', 'Cao (nhân)', 0.05], ['alpha', 'Độ mờ (0-1)', 0.05]];
 const TA_ACTIONS = [['shake', 'Rung màn hình'], ['customAnim', 'Phát animation tuỳ chỉnh của khối'], ['signal', 'Gửi tín hiệu (cho nhân vật / khối)'], ['solid', 'Bật/tắt va chạm (rắn)'],
-  ['hazard', 'Bật/tắt gây sát thương'], ['visible', 'Hiện/ẩn khối'], ['var', 'Đổi biến game'], ['startBlock', 'Chạy animation của khối khác'], ['stopAnim', 'Dừng chuỗi này']];
-const taUI = { item: null, t: 0, playing: false, last: 0, sel: null, zoom: 1, px: 0, py: 0, big: false, cur: null, view: null };
-const TA_CSS = '#taModal .modal-box{width:min(780px,98vw);max-width:98vw;max-height:96vh;overflow:auto;padding:10px;box-sizing:border-box;}' +
-  '#taPrevWrap{position:sticky;top:0;z-index:3;background:var(--panel,#14161c);padding-bottom:6px;}' +
+  ['hazard', 'Bật/tắt gây sát thương'], ['visible', 'Hiện/ẩn khối'], ['var', 'Đổi biến game'], ['sound', 'Phát âm thanh (bíp)'], ['startBlock', 'Chạy animation của khối khác'], ['stopAnim', 'Dừng chuỗi này']];
+const taUI = { item: null, t: 0, playing: false, last: 0, sel: null, zoom: 1, px: 0, py: 0, mode: 'normal', cur: null, view: null, bezIn: [] };
+const TA_CSS = '#taModal .modal-box{width:min(780px,98vw);max-width:98vw;max-height:96vh;max-height:96dvh;overflow:auto;padding:0 10px 10px;box-sizing:border-box;}' +
+  '#taHead{position:sticky;top:0;z-index:6;display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--panel,#14161c);padding:6px 0;min-height:36px;}' +
+  '#taHead h3{margin:0;font-size:15px;}' +
+  '#taPrevWrap{position:sticky;top:46px;z-index:5;background:var(--panel,#14161c);padding-bottom:6px;}' +
   '#taPrev{width:100%;display:block;touch-action:none;background:#0f1115;cursor:grab;}' +
+  '#taTL{width:100%;height:36px;display:block;margin-top:6px;touch-action:none;background:#0f1115;}' +
   '#taCtl{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px;}' +
   '#taCtl button{min-width:44px;min-height:38px;}#taSeek{flex:1;min-width:110px;}' +
+  '#taPrevWrap.min{display:flex;gap:8px;align-items:center;padding-bottom:4px;}' +
+  '#taPrevWrap.min #taPrev{width:112px;height:64px;flex:none;}' +
+  '#taPrevWrap.min #taCtl{margin:0;flex:1;}#taPrevWrap.min #taCtl>:not(#taPlay):not(#taMinBtn){display:none;}' +
+  '#taPrevWrap.min #taTL,#taPrevWrap.min #taHint{display:none;}' +
   '#taModal .row{flex-wrap:wrap;gap:6px;}#taModal input[type=number],#taModal input[type=text],#taModal select{min-height:36px;}' +
   '@media (min-width:900px){#taModal .modal-box{display:grid;grid-template-columns:minmax(360px,1fr) minmax(380px,1fr);column-gap:14px;align-items:start;width:min(1240px,97vw);}' +
-  '#taModal .modal-box>h3,#taModal .modal-box>.modal-actions{grid-column:1/-1;}#taPrevWrap{grid-column:1;grid-row:2;}' +
-  '#taBody{grid-column:2;grid-row:2;max-height:78vh;overflow:auto;padding-right:6px;}}';
+  '#taModal .modal-box>#taHead,#taModal .modal-box>.modal-actions{grid-column:1/-1;}#taPrevWrap{grid-column:1;grid-row:2;}' +
+  '#taBody{grid-column:2;grid-row:2;max-height:78vh;overflow:auto;padding-right:6px;}}' +
+  '@media (orientation:landscape) and (max-height:560px){#taModal .modal-box{display:grid;grid-template-columns:minmax(220px,40%) 1fr;column-gap:10px;width:99vw;max-width:99vw;height:98vh;height:98dvh;max-height:none;overflow:hidden;padding:0 8px 6px;}' +
+  '#taHead{grid-column:1/-1;position:static;}#taPrevWrap{grid-column:1;grid-row:2;position:static;overflow:auto;}' +
+  '#taBody{grid-column:2;grid-row:2;overflow:auto;max-height:none;}#taModal .modal-actions{display:none;}}';
 function newTechAnim() {
-  return { enabled: true, trigger: { type: 'start', name: '', button: '', cond: { var: '', op: '>=', value: '1' } }, repeat: 'none', count: 0,
-    once: false, retrigger: 'ignore', space: 'rel', steps: [], rules: [] };
+  return { enabled: true, trigger: { type: 'start', delay: 0, name: '', button: '', cond: { var: '', op: '>=', value: '1' } }, repeat: 'none', count: 0,
+    carry: true, once: false, retrigger: 'ignore', space: 'rel', steps: [], rules: [] };
 }
 function newTechStep(ta, it) {
   const last = ta.steps[ta.steps.length - 1];
@@ -4613,7 +4629,8 @@ function sanitizeTech(t) {
   const num = (v, d) => isFinite(+v) ? +v : d;
   const out = newTechAnim(), tg = t.trigger || {};
   out.enabled = t.enabled !== false;
-  out.trigger = { type: ['start', 'touch', 'signal', 'button', 'var'].indexOf(tg.type) >= 0 ? tg.type : 'start', name: String(tg.name || ''), button: String(tg.button || ''),
+  out.carry = t.carry !== false;
+  out.trigger = { type: ['start', 'touch', 'signal', 'button', 'var'].indexOf(tg.type) >= 0 ? tg.type : 'start', delay: Math.max(0, num(tg.delay, 0)), name: String(tg.name || ''), button: String(tg.button || ''),
     cond: { var: String((tg.cond && tg.cond.var) || ''), op: String((tg.cond && tg.cond.op) || '>='), value: String(tg.cond && tg.cond.value != null ? tg.cond.value : '1') } };
   out.repeat = ['none', 'loop', 'pingpong'].indexOf(t.repeat) >= 0 ? t.repeat : 'none';
   out.count = Math.max(0, Math.round(num(t.count, 0)));
@@ -4694,20 +4711,55 @@ function taDraw() {
   }
   g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = '#fff'; g.font = '13px sans-serif';
   g.fillText('t = ' + taUI.t.toFixed(2) + 's / ' + T.toFixed(2) + 's   (khung xanh = hitbox)', 8, 16);
-  g.textAlign = 'right'; g.fillText(Math.round(taUI.zoom * 100) + '%', W - 8, 16);
+  const fl = [];
+  ta.rules.forEach(r => { const tau = taRuleTime(ta, sched, r); if (tau != null && taUI.t >= tau && taUI.t - tau < 0.45) { const a = TA_ACTIONS.find(x => x[0] === r.action); fl.push(a ? a[1] : r.action); } });
+  g.fillStyle = '#7fbf63'; g.font = '13px sans-serif'; g.textAlign = 'center';
+  fl.slice(0, 3).forEach((f, i) => g.fillText('▶ ' + f, W / 2, 34 + i * 16));
+  g.fillStyle = '#fff'; g.textAlign = 'right'; g.fillText(Math.round(taUI.zoom * 100) + '%', W - 8, 16);
   g.textAlign = 'left'; g.fillStyle = 'rgba(255,255,255,.75)'; g.font = '11px sans-serif';
   if (taUI.cur) g.fillText('x ' + Math.round(taUI.cur[0]) + ' · y ' + Math.round(taUI.cur[1]), 8, H - 8);
+  taTimeline();
+}
+function taRuleTime(ta, sc, r) {
+  const st = ta.steps.find(x => x.id === r.step);
+  return st ? sc.S[st.id] + (r.when === 'end' ? Math.max(0, st.dur || 0) : 0) + Math.max(0, r.delay || 0) : null;
+}
+function taTimeline() {
+  const cv = document.getElementById('taTL'); if (!cv || !taUI.item) return;
+  const dpr = Math.min(2, window.devicePixelRatio || 1), r = cv.getBoundingClientRect();
+  const w = Math.max(160, Math.round((r.width || 300) * dpr)), h = Math.round(36 * dpr);
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+  const ta = taUI.item.techAnim, sc = RT.techSchedule(ta), T = Math.max(0.01, sc.total), g = cv.getContext('2d');
+  g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = '#0f1115'; g.fillRect(0, 0, w, h);
+  const pad = 6 * dpr, X = (t) => pad + t / T * (w - 2 * pad);
+  ta.steps.forEach((st, i) => {
+    g.fillStyle = st.id === taUI.sel ? '#e0a030' : 'rgba(130,160,220,.8)';
+    g.fillRect(X(sc.S[st.id]), (4 + (i % 3) * 7) * dpr, Math.max(2 * dpr, X(sc.S[st.id] + st.dur) - X(sc.S[st.id])), 5 * dpr);
+  });
+  ta.rules.forEach(rl => {
+    const t = taRuleTime(ta, sc, rl); if (t == null) return;
+    const x = X(t), y = 28 * dpr; g.fillStyle = '#7fbf63';
+    g.beginPath(); g.moveTo(x, y - 6 * dpr); g.lineTo(x - 4 * dpr, y + 4 * dpr); g.lineTo(x + 4 * dpr, y + 4 * dpr); g.fill();
+  });
+  g.strokeStyle = '#fff'; g.lineWidth = dpr; g.beginPath(); g.moveTo(X(taUI.t), 0); g.lineTo(X(taUI.t), h); g.stroke();
 }
 function taApplySize() {
   const cv = document.getElementById('taPrev'); if (!cv) return;
-  const wide = window.innerWidth >= 900;
-  cv.style.height = taUI.big ? (wide ? 'min(70vh,620px)' : 'min(62vh,520px)') : (wide ? '300px' : 'min(24vh,180px)');
+  const wide = window.innerWidth >= 900, land = window.innerWidth > window.innerHeight && window.innerHeight <= 560;
+  const wrap = document.getElementById('taPrevWrap'); if (wrap) wrap.classList.toggle('min', taUI.mode === 'min');
+  let h;
+  if (taUI.mode === 'min') h = '64px';
+  else if (taUI.mode === 'big') h = wide ? 'min(70vh,620px)' : (land ? 'min(70vh,330px)' : 'min(62vh,520px)');
+  else h = wide ? '300px' : (land ? 'min(44vh,190px)' : 'min(24vh,180px)');
+  cv.style.height = h;
   const r = cv.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
-  const w = Math.max(160, Math.round(r.width * dpr)), h = Math.max(100, Math.round(r.height * dpr));
-  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
-  const b = document.getElementById('taSizeBtn'); if (b) b.textContent = taUI.big ? 'Thu nhỏ' : 'Phóng to';
+  const w = Math.max(100, Math.round(r.width * dpr)), hh = Math.max(60, Math.round(r.height * dpr));
+  if (cv.width !== w || cv.height !== hh) { cv.width = w; cv.height = hh; }
+  const b = document.getElementById('taSizeBtn'); if (b) { b.textContent = taUI.mode === 'big' ? 'Thu nhỏ' : 'Phóng to'; b.disabled = taUI.mode === 'min'; }
+  const mb = document.getElementById('taMinBtn'); if (mb) mb.textContent = taUI.mode === 'min' ? 'Mở rộng' : 'Thu gọn';
   taDraw();
 }
+function taToggleBig() { taUI.mode = taUI.mode === 'big' || taUI.mode === 'min' ? 'normal' : 'big'; taApplySize(); }
 function taZoomAt(sx, sy, f) {   // zoom quanh điểm (sx, sy) trên khung, giữ nguyên điểm thế giới dưới con trỏ
   const v = taUI.view; if (!v) return;
   const nz = Math.max(0.1, Math.min(8, taUI.zoom * f));
@@ -4748,7 +4800,7 @@ function taBindPreview(cv) {
     if (ptrs.size < 2) { pd = 0; lastMid = null; }
     if (had && ptrs.size === 0 && moved < 8 && e.type === 'pointerup') {   // chạm 2 lần = phóng to / thu nhỏ khung xem trước
       const now = Date.now();
-      if (now - lastTap < 320) { lastTap = 0; taUI.big = !taUI.big; taApplySize(); } else lastTap = now;
+      if (now - lastTap < 320) { lastTap = 0; taToggleBig(); } else lastTap = now;
     }
   };
   cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
@@ -4762,16 +4814,52 @@ function taLoop(ts) {
   const sk = document.getElementById('taSeek'); if (sk) sk.value = String(Math.round(taUI.t / T * 1000));
   taDraw(); requestAnimationFrame(taLoop);
 }
+const TA_BEZ = { linear: [0, 0, 1, 1], in: [0.55, 0.085, 0.68, 0.53], out: [0.25, 0.46, 0.45, 0.94], inout: [0.455, 0.03, 0.515, 0.955], back: [0.34, 1.56, 0.64, 1] };
+function taCurveGeom(cv) { return { L: 16, R: cv.width - 16, T: 14, B: cv.height - 14, vmin: -1, vmax: 2 }; }
 function taCurve(cv, st) {
-  const g = cv.getContext('2d'), W = cv.width, H = cv.height;
+  const g = cv.getContext('2d'), W = cv.width, H = cv.height, G = taCurveGeom(cv);
+  const X = (u) => G.L + u * (G.R - G.L), Y = (v) => G.B - (v - G.vmin) / (G.vmax - G.vmin) * (G.B - G.T);
   g.fillStyle = '#0f1115'; g.fillRect(0, 0, W, H);
-  g.strokeStyle = 'rgba(255,255,255,.15)'; g.strokeRect(10, 10, W - 20, H - 20);
-  g.strokeStyle = '#e0a030'; g.lineWidth = 2; g.beginPath();
-  for (let i = 0; i <= 60; i++) {
-    const u = i / 60, v = RT.easeFn(st, u), x = 10 + u * (W - 20), y = H - 10 - Math.max(-0.5, Math.min(1.5, v)) * (H - 20);
-    i ? g.lineTo(x, y) : g.moveTo(x, y);
+  g.strokeStyle = 'rgba(255,255,255,.18)'; g.lineWidth = 1; g.setLineDash([4, 4]);
+  [0, 1].forEach(v => { g.beginPath(); g.moveTo(G.L, Y(v)); g.lineTo(G.R, Y(v)); g.stroke(); });
+  [0, 1].forEach(u => { g.beginPath(); g.moveTo(X(u), G.T); g.lineTo(X(u), G.B); g.stroke(); });
+  g.setLineDash([]);
+  if (st.ease === 'bezier') {
+    const b = st.bez; g.strokeStyle = 'rgba(224,160,48,.55)';
+    g.beginPath(); g.moveTo(X(0), Y(0)); g.lineTo(X(b[0]), Y(b[1])); g.moveTo(X(1), Y(1)); g.lineTo(X(b[2]), Y(b[3])); g.stroke();
   }
+  g.strokeStyle = '#e0a030'; g.lineWidth = 2.5; g.beginPath();
+  for (let i = 0; i <= 80; i++) { const u = i / 80, v = RT.easeFn(st, u); if (i) g.lineTo(X(u), Y(v)); else g.moveTo(X(u), Y(v)); }
   g.stroke();
+  if (st.ease === 'bezier') {
+    const b = st.bez; g.fillStyle = '#7fbf63';
+    [[b[0], b[1]], [b[2], b[3]]].forEach(p => { g.beginPath(); g.arc(X(p[0]), Y(p[1]), 9, 0, 7); g.fill(); });
+  }
+  g.fillStyle = 'rgba(255,255,255,.7)'; g.font = '11px sans-serif'; g.fillText('thời gian →', G.R - 62, G.B + 11); g.fillText('giá trị', 4, G.T - 2);
+}
+function taBindCurve(cv, st) {
+  let drag = -1;
+  const G = taCurveGeom(cv), X = (u) => G.L + u * (G.R - G.L), Y = (v) => G.B - (v - G.vmin) / (G.vmax - G.vmin) * (G.B - G.T);
+  const pt = (e) => {
+    const r = cv.getBoundingClientRect(), px = (e.clientX - r.left) * cv.width / (r.width || 1), py = (e.clientY - r.top) * cv.height / (r.height || 1);
+    return { px, py, u: (px - G.L) / (G.R - G.L), v: G.vmin + (G.B - py) / (G.B - G.T) * (G.vmax - G.vmin) };
+  };
+  cv.addEventListener('pointerdown', (e) => {
+    if (st.ease !== 'bezier') return;
+    const p = pt(e); let best = -1, bd = 34 * 34;
+    [0, 1].forEach(i => { const dx = X(st.bez[i * 2]) - p.px, dy = Y(st.bez[i * 2 + 1]) - p.py, d = dx * dx + dy * dy; if (d < bd) { bd = d; best = i; } });
+    if (best >= 0) { drag = best; try { cv.setPointerCapture(e.pointerId); } catch (_) {} if (e.preventDefault) e.preventDefault(); }
+  });
+  cv.addEventListener('pointermove', (e) => {
+    if (drag < 0) return;
+    const p = pt(e);
+    st.bez[drag * 2] = Math.round(Math.max(0, Math.min(1, p.u)) * 100) / 100;
+    st.bez[drag * 2 + 1] = Math.round(Math.max(-1, Math.min(2, p.v)) * 100) / 100;
+    taCurve(cv, st); taDraw();
+    (taUI.bezIn || []).forEach((inp, i) => { if (inp) inp.value = st.bez[i]; });
+  });
+  const end = () => { if (drag >= 0) { drag = -1; scheduleSave(); } };
+  cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
 }
 function taDefaultTo(key, ta, it) {
   if (key === 'x') return ta.space === 'abs' ? it.x + 100 : 100;
@@ -4810,12 +4898,21 @@ function taStepForm(st, ta, it, box) {
     }
     r.appendChild(w); box.appendChild(r);
   });
-  box.appendChild(row('Đường cong', selectInput(st.ease, TA_EASE, v => { st.ease = v; taRender(); })));
+  box.appendChild(row('Đường cong', selectInput(st.ease, TA_EASE, v => {
+    if (v === 'bezier' && st.ease !== 'bezier') st.bez = (TA_BEZ[st.ease] || [0.42, 0, 0.58, 1]).slice();   // lấy đường cong hiện tại làm điểm xuất phát để chỉnh tay
+    st.ease = v; taRender();
+  })));
+  const cv = document.createElement('canvas'); cv.width = 360; cv.height = 200; cv.id = 'taCurve';
+  cv.style.cssText = 'width:100%;max-width:440px;display:block;margin:4px 0;touch-action:none;background:#0f1115;';
+  box.appendChild(cv); taCurve(cv, st); taBindCurve(cv, st);
+  taUI.bezIn = [];
   if (st.ease === 'bezier') {
-    ['x1', 'y1', 'x2', 'y2'].forEach((lb, i) => box.appendChild(row('Điểm ' + lb, numInput(st.bez[i], v => { st.bez[i] = (i % 2 === 0) ? Math.max(0, Math.min(1, v)) : v; taCurveRefresh(st); taDraw(); }, 0.05))));
-  }
-  const cv = document.createElement('canvas'); cv.width = 240; cv.height = 110; cv.id = 'taCurve'; cv.style.cssText = 'width:240px;max-width:100%;display:block;margin:4px 0;';
-  box.appendChild(cv); taCurve(cv, st);
+    box.appendChild(el('div', 'ev-hint', 'Kéo 2 chấm tròn xanh trên đồ thị để chỉnh đường cong (hoặc nhập số bên dưới).'));
+    ['x1', 'y1', 'x2', 'y2'].forEach((lb, i) => {
+      const inp = numInput(st.bez[i], v => { st.bez[i] = (i % 2 === 0) ? Math.max(0, Math.min(1, v)) : Math.max(-1, Math.min(2, v)); taCurveRefresh(st); taDraw(); }, 0.05);
+      taUI.bezIn[i] = inp; box.appendChild(row('Điểm ' + lb, inp));
+    });
+  } else box.appendChild(el('div', 'ev-hint', 'Chọn "Tự chỉnh" để kéo đường cong trực tiếp (lấy đường cong hiện tại làm điểm bắt đầu).'));
   const bar = el('div'); bar.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;margin:6px 0;';
   const up = el('button', 'btn-mini', 'Lên'); up.onclick = () => { if (order > 0) { ta.steps.splice(order, 1); ta.steps.splice(order - 1, 0, st); taRender(); scheduleSave(); } };
   const dn = el('button', 'btn-mini', 'Xuống'); dn.onclick = () => { if (order < ta.steps.length - 1) { ta.steps.splice(order, 1); ta.steps.splice(order + 1, 0, st); taRender(); scheduleSave(); } };
@@ -4864,6 +4961,12 @@ function taRuleParams(r, ta, it, box) {
       box.appendChild(row('Giá trị', textInput(p.value != null ? p.value : '1', v => p.value = v)));
       break;
     }
+    case 'sound':
+      if (p.frequency == null) p.frequency = 440; if (p.duration == null) p.duration = 0.2; if (!p.wave) p.wave = 'sine';
+      box.appendChild(row('Tần số (Hz)', numInput(p.frequency, v => p.frequency = Math.max(20, Math.min(4000, v)), 10, 20, 4000)));
+      box.appendChild(row('Thời gian (s)', numInput(p.duration, v => p.duration = Math.max(0.05, Math.min(5, v)), 0.05, 0.05, 5)));
+      box.appendChild(row('Dạng sóng', selectInput(p.wave, [['sine', 'Sin'], ['square', 'Vuông'], ['sawtooth', 'Răng cưa'], ['triangle', 'Tam giác']], v => p.wave = v)));
+      break;
     case 'startBlock': {
       const bl = State.items.filter(x => x.kind === 'block' && x !== it).map(x => [x.id, x.name]);
       if (!bl.length) box.appendChild(el('div', 'ev-hint', 'Chưa có khối nào khác.'));
@@ -4892,7 +4995,11 @@ function taRender() {
   const add = (n) => body.appendChild(n);
   add(sectionHeader('Kích hoạt chuỗi'));
   add(row('Bật animation', checkbox(ta.enabled, v => ta.enabled = v)));
-  add(row('Kiểu kích hoạt', selectInput(ta.trigger.type, [['start', 'Khi bắt đầu game'], ['touch', 'Khi người chơi chạm khối'], ['signal', 'Khi nhận tín hiệu'], ['button', 'Khi nhấn nút UI'], ['var', 'Khi biến thoả điều kiện']], v => { ta.trigger.type = v; taRender(); })));
+  add(row('Kiểu kích hoạt', selectInput(ta.trigger.type, [['start', 'Khi bắt đầu game (có thể trễ N giây)'], ['touch', 'Khi người chơi chạm khối'], ['signal', 'Khi nhận tín hiệu'], ['button', 'Khi nhấn nút UI'], ['var', 'Khi biến thoả điều kiện']], v => { ta.trigger.type = v; taRender(); })));
+  if (ta.trigger.type === 'start') {
+    add(row('Sau số giây kể từ khi bấm chạy game', numInput(ta.trigger.delay || 0, v => ta.trigger.delay = Math.max(0, v), 0.5, 0)));
+    add(el('div', 'ev-hint', '0 = chạy ngay khi bắt đầu. Ví dụ 5 = chờ 5 giây sau khi bấm chạy rồi mới bắt đầu chuỗi.'));
+  }
   if (ta.trigger.type === 'signal') add(row('Tên tín hiệu', textInput(ta.trigger.name, v => ta.trigger.name = v.replace(/[^A-Za-z0-9_]/g, ''))));
   if (ta.trigger.type === 'button') {
     const btns = State.ui.buttons || [];
@@ -4918,6 +5025,8 @@ function taRender() {
       ta.space = v; taRender(); taDraw();
     }
   })));
+  add(row('Chở nhân vật đứng trên khối', checkbox(ta.carry !== false, v => ta.carry = v)));
+  add(el('div', 'ev-hint', 'Tích: nhân vật đứng trên khối sẽ di chuyển (và xoay) theo khối. Bỏ tích: khối trượt đi, nhân vật đứng yên.'));
   add(sectionHeader('Các bước animation (' + ta.steps.length + ')'));
   const sc = RT.techSchedule(ta);
   ta.steps.forEach((st, i) => {
@@ -4949,31 +5058,51 @@ function taRender() {
   const sk = document.getElementById('taSeek'); if (sk) sk.value = String(Math.round(Math.min(1, taUI.t / taTotal()) * 1000));
   taDraw();
 }
+function closeTech() {
+  taUI.playing = false;
+  const m = document.getElementById('taModal'); if (m) m.classList.remove('show');
+  renderInspector();
+}
 function openTechModal(item) {
   if (!item.techAnim) item.techAnim = newTechAnim();
-  Object.assign(taUI, { item, t: 0, playing: false, zoom: 1, px: 0, py: 0, big: false, cur: null, view: null, sel: item.techAnim.steps[0] ? item.techAnim.steps[0].id : null });
+  Object.assign(taUI, { item, t: 0, playing: false, zoom: 1, px: 0, py: 0, cur: null, view: null, sel: item.techAnim.steps[0] ? item.techAnim.steps[0].id : null });
   if (!document.getElementById('taStyle')) { const st = document.createElement('style'); st.id = 'taStyle'; st.textContent = TA_CSS; (document.head || document.body).appendChild(st); }
   let m = document.getElementById('taModal');
   if (!m) {
     m = document.createElement('div'); m.id = 'taModal'; m.className = 'modal';
-    m.innerHTML = '<div class="modal-box"><h3>Animation Kỹ Thuật</h3>' +
+    m.innerHTML = '<div class="modal-box"><div id="taHead"><h3>Animation Kỹ Thuật</h3><button id="btnTaX" class="btn primary">Xong</button></div>' +
       '<div id="taPrevWrap"><canvas id="taPrev" width="640" height="260"></canvas>' +
       '<div id="taCtl"><button id="taPlay" class="btn primary">Phát</button><input id="taSeek" type="range" min="0" max="1000" value="0">' +
-      '<button id="taZoomOut" class="btn">−</button><button id="taZoomIn" class="btn">+</button><button id="taFit" class="btn">Vừa</button><button id="taSizeBtn" class="btn">Phóng to</button></div>' +
-      '<div style="font-size:11px;opacity:.7;margin-top:4px;">Chạm 2 lần vào khung xem trước để phóng to/thu nhỏ khung · kéo: di chuyển · lăn chuột hoặc chụm 2 ngón: zoom xa/gần</div></div>' +
+      '<button id="taZoomOut" class="btn">−</button><button id="taZoomIn" class="btn">+</button><button id="taFit" class="btn">Vừa</button>' +
+      '<button id="taSizeBtn" class="btn">Phóng to</button><button id="taMinBtn" class="btn">Thu gọn</button></div>' +
+      '<canvas id="taTL" width="640" height="36"></canvas>' +
+      '<div id="taHint" style="font-size:11px;opacity:.7;margin-top:4px;">Chạm 2 lần vào khung xem trước để phóng to/thu nhỏ · kéo: di chuyển · lăn chuột / chụm 2 ngón: zoom · "Thu gọn": đưa khung lên góc trên · thanh dưới: dòng thời gian (thanh xanh = bước, tam giác = hành động)</div></div>' +
       '<div id="taBody"></div><div class="modal-actions"><button id="btnTaClose" class="btn primary">Xong</button></div></div>';
     document.body.appendChild(m);
-    document.getElementById('btnTaClose').onclick = () => { taUI.playing = false; m.classList.remove('show'); renderInspector(); };
+    document.getElementById('btnTaClose').onclick = closeTech;
+    document.getElementById('btnTaX').onclick = closeTech;
+    let downBackdrop = false;   // bấm ra ngoài menu để đóng
+    m.addEventListener('pointerdown', (e) => { downBackdrop = (e.target === m); });
+    m.addEventListener('pointerup', (e) => { if (downBackdrop && e.target === m) closeTech(); downBackdrop = false; });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && m.classList.contains('show')) closeTech(); });
     document.getElementById('taPlay').onclick = () => {
       taUI.playing = !taUI.playing; document.getElementById('taPlay').textContent = taUI.playing ? 'Dừng' : 'Phát';
       if (taUI.playing) { taUI.last = performance.now(); requestAnimationFrame(taLoop); }
     };
-    document.getElementById('taSeek').oninput = (e) => { taUI.playing = false; document.getElementById('taPlay').textContent = 'Phát'; taUI.t = taTotal() * (+e.target.value) / 1000; taDraw(); };
+    const seekTo = (frac) => { taUI.playing = false; document.getElementById('taPlay').textContent = 'Phát'; taUI.t = taTotal() * Math.max(0, Math.min(1, frac)); const sk = document.getElementById('taSeek'); if (sk) sk.value = String(Math.round(taUI.t / taTotal() * 1000)); taDraw(); };
+    document.getElementById('taSeek').oninput = (e) => seekTo((+e.target.value) / 1000);
+    const tl = document.getElementById('taTL');
+    let tlDrag = false;
+    const tlPos = (e) => { const r = tl.getBoundingClientRect(); seekTo((e.clientX - r.left - 6) / Math.max(1, r.width - 12)); };
+    tl.addEventListener('pointerdown', (e) => { tlDrag = true; try { tl.setPointerCapture(e.pointerId); } catch (_) {} tlPos(e); });
+    tl.addEventListener('pointermove', (e) => { if (tlDrag) tlPos(e); });
+    tl.addEventListener('pointerup', () => { tlDrag = false; }); tl.addEventListener('pointercancel', () => { tlDrag = false; });
     const zc = () => { const v = taUI.view; return v ? [v.W / 2, v.H / 2] : [0, 0]; };
     document.getElementById('taZoomOut').onclick = () => { const c = zc(); taZoomAt(c[0], c[1], 1 / 1.4); };
     document.getElementById('taZoomIn').onclick = () => { const c = zc(); taZoomAt(c[0], c[1], 1.4); };
     document.getElementById('taFit').onclick = () => { taUI.zoom = 1; taUI.px = 0; taUI.py = 0; taDraw(); };
-    document.getElementById('taSizeBtn').onclick = () => { taUI.big = !taUI.big; taApplySize(); };
+    document.getElementById('taSizeBtn').onclick = () => { taUI.mode = taUI.mode === 'big' ? 'normal' : 'big'; taApplySize(); };
+    document.getElementById('taMinBtn').onclick = () => { taUI.mode = taUI.mode === 'min' ? 'normal' : 'min'; taApplySize(); };
     taBindPreview(document.getElementById('taPrev'));
     window.addEventListener('resize', () => { if (m.classList.contains('show')) taApplySize(); });
   }
@@ -5683,7 +5812,7 @@ async function init() {
   await loadProject(meta);
   updateCamInfo();
   requestAnimationFrame(loop);
-  toast('MNHR-engine Alpha 9.0.0 · lưu trữ: ' + Store.name(), 'ok', 2800);
+  toast('MNHR-engine Alpha 9.0.1 · lưu trữ: ' + Store.name(), 'ok', 2800);
 }
 
 return {
