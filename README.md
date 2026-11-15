@@ -41,5 +41,7 @@
 
 - Note: À mà nếu mọi người gặp lỗi vật lý ở Auto-Dedect-PNG Per-Frame bị lỗi thì mọi người đừng supprot nhé, Đấy không phải lỗi, đấy là tính năng đấy. (Joke)
 
+- (Click 3 lần vào "MNHR-Engine".)
+
 ---
 [Copyright 2026 (c) Meonehero]
