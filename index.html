@@ -3,135 +3,186 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<meta name="theme-color" content="#16140f">
-<title>MNHR-Engine</title>
+<meta name="theme-color" content="#0a1a0d">
+<title>MNHR-Engine 🎄</title>
 <script>try{var _s=JSON.parse(localStorage.getItem("mnhr_settings")||"{}");if(_s.theme)document.documentElement.setAttribute("data-theme",_s.theme);}catch(e){}</script>
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-html,body{margin:0;height:100%;overflow:hidden;background:#16140f;color:#e9e4d6;
+html,body{margin:0;height:100%;overflow:hidden;background:#0a1a0d;color:#f5f0e1;
   font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:13px;
   user-select:none;-webkit-user-select:none;}
 #app{display:flex;flex-direction:column;height:100dvh;}
 #topbar{height:44px;flex:0 0 44px;display:flex;align-items:center;gap:6px;padding:0 8px;
-  background:#1d1b15;border-bottom:1px solid #38352c;overflow-x:auto;}
+  background:linear-gradient(180deg,#1a3020 0%,#122418 100%);
+  border-bottom:2px solid #c41e3a;overflow-x:auto;position:relative;z-index:1;}
+#topbar::after{content:'';position:absolute;bottom:-2px;left:0;right:0;height:2px;
+  background:repeating-linear-gradient(90deg,#c41e3a 0 12px,#f4c430 12px 24px,#2d7a3e 24px 36px,#f4c430 36px 48px);
+  pointer-events:none;}
 #topbar::-webkit-scrollbar{display:none;}
-.logo{display:flex;gap:4px;font-size:13px;color:#ada798;white-space:nowrap;}
-.logo b{color:#c9a55e;font-weight:800;}
-.logo span{color:#ada798;font-weight:700;}
-.logo .ver{font-style:normal;font-size:10px;color:#767064;align-self:flex-end;margin-left:4px;}
+.logo{display:flex;gap:4px;font-size:13px;color:#a8b8a0;white-space:nowrap;
+  cursor:pointer;transition:filter .15s,transform .1s;align-items:center;}
+.logo:hover{filter:brightness(1.25);}
+.logo:active{transform:scale(.97);}
+.logo b{color:#f4c430;font-weight:800;text-shadow:0 0 8px rgba(244,196,48,.6),0 0 16px rgba(244,196,48,.3);}
+.logo span{color:#dc2626;font-weight:700;text-shadow:0 0 6px rgba(220,38,38,.4);}
+.logo .ver{font-style:normal;font-size:10px;color:#6a8068;align-self:flex-end;margin-left:4px;}
 .spacer{flex:1;min-width:0;}
-.btn{background:#252319;border:1px solid #4a463a;color:#e9e4d6;border-radius:0;
+.btn{background:#1e3a22;border:1px solid #2d4a32;color:#f5f0e1;border-radius:0;
   padding:7px 10px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;
-  transition:background .12s,border-color .12s;line-height:1;flex:0 0 auto;}
-.btn:hover{background:#2e2c21;border-color:#5c5748;}
-.btn:active{background:#38352a;transform:translateY(1px);}
-.btn.primary{background:#82a76a;border-color:#82a76a;color:#0f1a0b;}
-.btn.primary:hover{background:#94b97b;border-color:#94b97b;}
-.btn.accent{background:#c9a55e;border-color:#c9a55e;color:#1a1408;}
-.btn.accent:hover{background:#d9bd80;border-color:#d9bd80;}
-.btn.danger{background:#2b1815;border-color:#522a24;color:#d98274;}
+  transition:background .12s,border-color .12s,box-shadow .12s;line-height:1;flex:0 0 auto;}
+.btn:hover{background:#264a2c;border-color:#3d6a44;box-shadow:0 0 6px rgba(45,122,62,.4);}
+.btn:active{background:#2e5a34;transform:translateY(1px);}
+.btn.primary{background:#2d7a3e;border-color:#3d9a4e;color:#fff;box-shadow:0 0 10px rgba(45,122,62,.4);}
+.btn.primary:hover{background:#3d9a4e;border-color:#4dbb5e;}
+.btn.accent{background:#f4c430;border-color:#f4c430;color:#1a1408;box-shadow:0 0 10px rgba(244,196,48,.4);}
+.btn.accent:hover{background:#ffd94d;border-color:#ffd94d;}
+.btn.danger{background:#3a1420;border-color:#c41e3a;color:#ff8fa3;}
+.btn.danger:hover{background:#4a1a28;}
 .btn.icon{padding:7px 9px;font-size:14px;}
 .btn[disabled]{opacity:.35;pointer-events:none;}
-.btn.dirty{border-color:#c9a55e;color:#c9a55e;}
+.btn.dirty{border-color:#f4c430;color:#f4c430;}
 #main{flex:1;display:flex;min-height:0;}
-#toolbar{width:58px;flex:0 0 58px;background:#1d1b15;border-right:1px solid #38352c;
+#toolbar{width:58px;flex:0 0 58px;background:#122418;border-right:1px solid #2d4a32;
   display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px 0;overflow-y:auto;}
-.tool{width:44px;height:44px;border-radius:0;background:#252319;border:1px solid #38352c;
-  color:#ada798;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  font-size:15px;line-height:1;cursor:pointer;gap:1px;transition:background .12s,border-color .12s;flex:0 0 auto;}
-.tool:hover{background:#2e2c21;border-color:#4a463a;}
-.tool:active{background:#38352a;}
-.tool.on{background:#c9a55e;border-color:#c9a55e;color:#1a1408;}
+.tool{width:44px;height:44px;border-radius:0;background:#1e3a22;border:1px solid #2d4a32;
+  color:#a8b8a0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  font-size:15px;line-height:1;cursor:pointer;gap:1px;
+  transition:background .12s,border-color .12s,box-shadow .12s;flex:0 0 auto;}
+.tool:hover{background:#264a2c;border-color:#3d6a44;color:#f5f0e1;}
+.tool:active{background:#2e5a34;}
+.tool.on{background:#c41e3a;border-color:#f4c430;color:#fff;
+  box-shadow:0 0 10px rgba(196,30,58,.6),inset 0 0 8px rgba(244,196,48,.2);}
 .tool span{font-size:7.5px;font-weight:800;letter-spacing:.3px;}
 #stageWrap{flex:1;min-width:0;position:relative;display:flex;align-items:center;
-  justify-content:center;background:radial-gradient(circle at 50% 40%,#201d16 0%,#16140f 70%);
+  justify-content:center;background:radial-gradient(circle at 50% 40%,#132a18 0%,#0a1a0d 70%);
   overflow:hidden;}
+#stageWrap::before{content:'';position:absolute;inset:0;pointer-events:none;z-index:0;
+  background-image:
+    radial-gradient(1.5px 1.5px at 30px 50px,rgba(255,255,255,.5),transparent),
+    radial-gradient(1px 1px at 120px 90px,rgba(255,255,255,.4),transparent),
+    radial-gradient(1.5px 1.5px at 200px 30px,rgba(255,255,255,.45),transparent),
+    radial-gradient(1px 1px at 80px 180px,rgba(255,255,255,.4),transparent),
+    radial-gradient(1.5px 1.5px at 160px 220px,rgba(255,255,255,.35),transparent),
+    radial-gradient(1px 1px at 250px 140px,rgba(255,255,255,.45),transparent);
+  background-size:300px 300px;animation:snowfall 30s linear infinite;opacity:.6;}
+@keyframes snowfall{from{background-position:0 0;}to{background-position:0 300px;}}
+/* Twinkling stars overlay */
+#stageWrap::after{content:'';position:absolute;inset:0;pointer-events:none;z-index:2;
+  background-image:
+    radial-gradient(1.6px 1.6px at 12% 18%,rgba(255,240,200,.95),transparent),
+    radial-gradient(1.2px 1.2px at 28% 62%,rgba(255,255,255,.9),transparent),
+    radial-gradient(1.6px 1.6px at 44% 22%,rgba(255,240,200,.95),transparent),
+    radial-gradient(1.2px 1.2px at 58% 72%,rgba(255,255,255,.85),transparent),
+    radial-gradient(1.6px 1.6px at 72% 34%,rgba(255,240,200,.95),transparent),
+    radial-gradient(1.2px 1.2px at 86% 58%,rgba(255,255,255,.85),transparent),
+    radial-gradient(1.6px 1.6px at 91% 82%,rgba(255,240,200,.95),transparent),
+    radial-gradient(1.2px 1.2px at 8% 88%,rgba(255,255,255,.85),transparent);
+  animation:twinkleStars 4.2s ease-in-out infinite;opacity:.45;}
+@keyframes twinkleStars{0%,100%{opacity:.25;filter:blur(0);}50%{opacity:.7;filter:blur(.3px);}}
 #stageWrap:fullscreen{background:#000;padding:0;}
-#stage{display:block;border-radius:0;
-  box-shadow:0 0 0 1px #38352c,0 10px 40px rgba(0,0,0,.6);
-  touch-action:none;background:#1d1b15;}
+#stage{display:block;border-radius:0;position:relative;z-index:1;
+  box-shadow:0 0 0 1px #2d4a32,0 10px 40px rgba(0,0,0,.7),0 0 40px rgba(196,30,58,.12);
+  touch-action:none;background:#1a2b1f;}
 #stageWrap:fullscreen #stage{border-radius:0;box-shadow:none;}
+/* Christmas lights strip at top of stage */
+#xmasLights{position:absolute;top:0;left:0;right:0;height:16px;z-index:3;
+  display:flex;justify-content:space-around;padding:0 14px;pointer-events:none;}
+#xmasLights::before{content:'';position:absolute;top:6px;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,#4a3a20 6%,#4a3a20 94%,transparent);}
+#xmasLights span{width:7px;height:11px;border-radius:50% 50% 50% 50% / 60% 60% 40% 40%;
+  position:relative;z-index:1;animation:xmasLight 1.6s ease-in-out infinite;margin-top:0;}
+#xmasLights span:nth-child(3n+1){background:#ff3b3b;box-shadow:0 0 6px #ff3b3b,0 0 12px rgba(255,59,59,.55);}
+#xmasLights span:nth-child(3n+2){background:#3bff5e;box-shadow:0 0 6px #3bff5e,0 0 12px rgba(59,255,94,.55);}
+#xmasLights span:nth-child(3n+3){background:#ffd83b;box-shadow:0 0 6px #ffd83b,0 0 12px rgba(255,216,59,.55);}
+@keyframes xmasLight{0%,100%{opacity:.35;transform:scale(.85);}50%{opacity:1;transform:scale(1.15);}}
+.xmas-corner{position:absolute;font-size:26px;z-index:2;pointer-events:none;
+  filter:drop-shadow(0 2px 8px rgba(0,0,0,.7)) drop-shadow(0 0 12px rgba(244,196,48,.35));
+  animation:xmasBob 3s ease-in-out infinite;line-height:1;opacity:.85;}
+.xmas-tl{top:14px;left:14px;}
+.xmas-tr{top:14px;right:14px;animation-delay:.5s;}
+.xmas-bl{bottom:14px;left:14px;animation-delay:1s;}
+.xmas-br{bottom:14px;right:14px;animation-delay:1.5s;}
+@keyframes xmasBob{0%,100%{transform:translateY(0) rotate(-6deg);}50%{transform:translateY(-6px) rotate(6deg);}}
 .fab{position:absolute;right:12px;bottom:12px;width:42px;height:42px;border-radius:0;
-  background:#c9a55e;color:#1a1408;border:none;
-  font-size:22px;font-weight:700;cursor:pointer;
-  box-shadow:0 3px 0 #66532e;z-index:5;
+  background:#c41e3a;color:#fff;border:none;font-size:22px;font-weight:700;cursor:pointer;
+  box-shadow:0 3px 0 #7a1020,0 0 15px rgba(196,30,58,.5);z-index:5;
   display:flex;align-items:center;justify-content:center;}
-.fab:hover{background:#d9bd80;}
-.fab:active{transform:translateY(2px);box-shadow:0 1px 0 #66532e;}
+.fab:hover{background:#dc2626;}
+.fab:active{transform:translateY(2px);box-shadow:0 1px 0 #7a1020;}
 .fab.fs{right:62px;bottom:12px;width:36px;height:36px;font-size:16px;
-  background:#82a76a;box-shadow:0 3px 0 #3f5334;}
-.fab.fs:hover{background:#94b97b;}
+  background:#2d7a3e;box-shadow:0 3px 0 #1a4a24,0 0 12px rgba(45,122,62,.4);}
+.fab.fs:hover{background:#3d9a4e;}
 #fsExit{display:none;position:absolute;top:12px;right:12px;z-index:950;
-  background:rgba(0,0,0,.7);border-color:#522a24;color:#d98274;}
+  background:rgba(0,0,0,.75);border-color:#c41e3a;color:#ff8fa3;}
 #stageWrap:fullscreen #fsExit{display:block;}
-#camInfo{position:absolute;left:10px;top:10px;font-size:10px;color:#ada798;
-  background:rgba(0,0,0,.55);padding:4px 8px;border-radius:0;display:none;}
+#camInfo{position:absolute;left:10px;top:24px;font-size:10px;color:#a8b8a0;
+  background:rgba(0,0,0,.6);padding:4px 8px;border-radius:0;display:none;}
 .panmode #camInfo{display:block;}
 .panmode #stage{cursor:grab;}
-#inspector{width:268px;flex:0 0 268px;background:#1d1b15;border-left:1px solid #38352c;
+#inspector{width:268px;flex:0 0 268px;background:#122418;border-left:1px solid #2d4a32;
   overflow-y:auto;padding:8px;transition:margin-right .2s;}
 #inspector.hidden{margin-right:-268px;}
 #inspector::-webkit-scrollbar{width:5px;}
-#inspector::-webkit-scrollbar-thumb{background:#4a463a;border-radius:0;}
+#inspector::-webkit-scrollbar-thumb{background:#3d6a44;border-radius:0;}
 .tabs{display:flex;gap:4px;margin-bottom:8px;}
 .tab{flex:1;padding:6px;text-align:center;font-size:11px;font-weight:800;letter-spacing:.5px;
-  background:#16140f;border:1px solid #38352c;border-radius:0;cursor:pointer;color:#767064;
+  background:#0a1a0d;border:1px solid #2d4a32;border-radius:0;cursor:pointer;color:#6a8068;
   text-transform:uppercase;}
-.tab:hover{background:#252319;color:#ada798;}
-.tab.on{background:#c9a55e;border-color:#c9a55e;color:#1a1408;}
-.ins-head{font-size:12px;font-weight:800;color:#c9a55e;letter-spacing:.5px;
+.tab:hover{background:#1e3a22;color:#a8b8a0;}
+.tab.on{background:#f4c430;border-color:#f4c430;color:#0a1a0d;}
+.ins-head{font-size:12px;font-weight:800;color:#f4c430;letter-spacing:.5px;
   text-transform:uppercase;margin:2px 0 8px;}
-.ins-sub{font-size:10px;font-weight:800;color:#767064;letter-spacing:.8px;
-  text-transform:uppercase;margin:12px 0 6px;border-top:1px solid #38352c;padding-top:8px;}
+.ins-sub{font-size:10px;font-weight:800;color:#6a8068;letter-spacing:.8px;
+  text-transform:uppercase;margin:12px 0 6px;border-top:1px solid #2d4a32;padding-top:8px;}
 .row{display:flex;align-items:center;gap:6px;margin-bottom:6px;}
-.row > span{flex:0 0 92px;font-size:11px;color:#ada798;}
-.inp{flex:1;min-width:0;background:#16140f;border:1px solid #38352c;color:#e9e4d6;
+.row > span{flex:0 0 92px;font-size:11px;color:#a8b8a0;}
+.inp{flex:1;min-width:0;background:#0a1a0d;border:1px solid #2d4a32;color:#f5f0e1;
   border-radius:0;padding:6px 7px;font-size:12px;font-family:inherit;outline:none;}
-.inp:hover{border-color:#4a463a;}
-.inp:focus{border-color:#c9a55e;}
+.inp:hover{border-color:#3d6a44;}
+.inp:focus{border-color:#f4c430;box-shadow:0 0 0 2px rgba(244,196,48,.15);}
 select.inp{appearance:none;
-  background-image:linear-gradient(45deg,transparent 50%,#ada798 50%),
-    linear-gradient(135deg,#ada798 50%,transparent 50%);
+  background-image:linear-gradient(45deg,transparent 50%,#a8b8a0 50%),
+    linear-gradient(135deg,#a8b8a0 50%,transparent 50%);
   background-position:calc(100% - 12px) 50%,calc(100% - 8px) 50%;
   background-size:4px 4px,4px 4px;background-repeat:no-repeat;padding-right:22px;}
 .grid4{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
-.grid4 .row > span{flex:0 0 16px;font-size:10px;color:#767064;}
-.empty{color:#6a6458;text-align:center;padding:30px 10px;font-size:12px;line-height:1.6;}
+.grid4 .row > span{flex:0 0 16px;font-size:10px;color:#6a8068;}
+.empty{color:#5a7058;text-align:center;padding:30px 10px;font-size:12px;line-height:1.6;}
 .anim-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
-.anim-slot{background:#16140f;border:1px solid #38352c;border-radius:0;padding:5px;
+.anim-slot{background:#0a1a0d;border:1px solid #2d4a32;border-radius:0;padding:5px;
   display:flex;flex-direction:column;gap:4px;cursor:pointer;transition:background .12s,border-color .12s;}
-.anim-slot:hover{background:#252319;}
-.anim-slot:active{background:#2e2c21;}
-.anim-slot.on{border-color:#82a76a;}
+.anim-slot:hover{background:#1e3a22;}
+.anim-slot:active{background:#264a2c;}
+.anim-slot.on{border-color:#f4c430;box-shadow:0 0 8px rgba(244,196,48,.3);}
 .anim-prev{height:42px;border-radius:0;
-  background:#1d1b15 repeating-conic-gradient(#252319 0% 25%,#1d1b15 0% 50%) 50%/10px 10px;
+  background:#122418 repeating-conic-gradient(#1e3a22 0% 25%,#122418 0% 50%) 50%/10px 10px;
   display:flex;align-items:center;justify-content:center;overflow:hidden;}
 .anim-prev img{max-width:100%;max-height:100%;object-fit:contain;}
-.anim-name{font-size:9px;font-weight:700;color:#ada798;text-align:center;}
-.anim-meta{font-size:8px;color:#767064;text-align:center;}
+.anim-name{font-size:9px;font-weight:700;color:#a8b8a0;text-align:center;}
+.anim-meta{font-size:8px;color:#6a8068;text-align:center;}
 .anim-btns{display:flex;gap:3px;}
-.btn-mini{flex:1;background:#252319;border:1px solid #38352c;color:#ada798;
+.btn-mini{flex:1;background:#1e3a22;border:1px solid #2d4a32;color:#a8b8a0;
   border-radius:0;font-size:9px;font-weight:700;padding:4px 0;cursor:pointer;}
-.btn-mini:hover{background:#2e2c21;color:#e9e4d6;}
-.btn-mini:active{background:#38352a;}
-.btn-mini.danger{background:#2b1815;border-color:#522a24;color:#d98274;}
+.btn-mini:hover{background:#264a2c;color:#f5f0e1;}
+.btn-mini:active{background:#2e5a34;}
+.btn-mini.danger{background:#3a1420;border-color:#c41e3a;color:#ff8fa3;}
 .full{width:100%;margin-top:12px;}
-#layers{height:78px;flex:0 0 78px;background:#1d1b15;border-top:1px solid #38352c;
+#layers{height:78px;flex:0 0 78px;background:#122418;border-top:1px solid #2d4a32;
   display:flex;align-items:center;gap:8px;overflow-x:auto;padding:0 8px;}
 #layers::-webkit-scrollbar{height:5px;}
-#layers::-webkit-scrollbar-thumb{background:#4a463a;border-radius:0;}
-.layer-card{flex:0 0 auto;width:62px;height:62px;border-radius:0;background:#16140f;
-  border:2px solid #38352c;display:flex;flex-direction:column;align-items:center;
+#layers::-webkit-scrollbar-thumb{background:#3d6a44;border-radius:0;}
+.layer-card{flex:0 0 auto;width:62px;height:62px;border-radius:0;background:#0a1a0d;
+  border:2px solid #2d4a32;display:flex;flex-direction:column;align-items:center;
   justify-content:center;gap:3px;cursor:pointer;position:relative;padding:3px;}
-.layer-card.sel{border-color:#c9a55e;box-shadow:0 0 0 3px rgba(201,165,94,.18);}
+.layer-card.sel{border-color:#f4c430;box-shadow:0 0 0 3px rgba(244,196,48,.2),0 0 10px rgba(244,196,48,.3);}
 .layer-card .thumb{width:34px;height:34px;border-radius:0;
-  background:#1d1b15 repeating-conic-gradient(#252319 0% 25%,#1d1b15 0% 50%) 50%/8px 8px;
+  background:#122418 repeating-conic-gradient(#1e3a22 0% 25%,#122418 0% 50%) 50%/8px 8px;
   display:flex;align-items:center;justify-content:center;font-size:16px;overflow:hidden;}
 .layer-card .thumb img{width:100%;height:100%;object-fit:contain;}
-.layer-card .nm{font-size:8px;font-weight:700;color:#ada798;max-width:56px;
+.layer-card .nm{font-size:8px;font-weight:700;color:#a8b8a0;max-width:56px;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;}
 .layer-card .del{position:absolute;top:-5px;right:-5px;width:18px;height:18px;
-  border-radius:0;background:#2b1815;border:1px solid #522a24;color:#d98274;
+  border-radius:0;background:#3a1420;border:1px solid #c41e3a;color:#ff8fa3;
   font-size:11px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-weight:700;}
 .layer-card .cam{position:absolute;top:-5px;left:-5px;width:18px;height:18px;border-radius:0;
   background:#1a2430;border:1px solid #2f4250;color:#8095a6;font-size:10px;
@@ -142,122 +193,213 @@ select.inp{appearance:none;
 .layer-card .ev{position:absolute;bottom:-5px;right:-5px;width:18px;height:18px;border-radius:0;
   background:#2a2418;border:1px solid #574a2a;color:#d4b46a;font-size:10px;
   display:flex;align-items:center;justify-content:center;}
-.layer-add{flex:0 0 auto;width:62px;height:62px;border-radius:0;background:#252319;
-  border:2px dashed #4a463a;color:#767064;font-size:22px;display:flex;align-items:center;
+.layer-add{flex:0 0 auto;width:62px;height:62px;border-radius:0;background:#1e3a22;
+  border:2px dashed #3d6a44;color:#6a8068;font-size:22px;display:flex;align-items:center;
   justify-content:center;cursor:pointer;}
-.layer-add:hover{border-color:#c9a55e;color:#c9a55e;}
-.set-sec{font-size:11px;font-weight:800;color:#c9a55e;margin:12px 0 6px;
+.layer-add:hover{border-color:#f4c430;color:#f4c430;}
+.set-sec{font-size:11px;font-weight:800;color:#f4c430;margin:12px 0 6px;
   letter-spacing:.4px;text-transform:uppercase;}
 .set-row{display:flex;align-items:center;justify-content:space-between;gap:10px;
-  padding:6px 0;font-size:12.5px;color:#ada798;}
-.set-row select{background:#16140f;color:#e9e4d6;border:1px solid #38352c;
+  padding:6px 0;font-size:12.5px;color:#a8b8a0;}
+.set-row select{background:#0a1a0d;color:#f5f0e1;border:1px solid #2d4a32;
   border-radius:0;padding:6px 8px;font-size:12px;}
 .set-stats{display:grid;grid-template-columns:1fr 1fr;gap:4px 14px;}
-.set-stat{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:#ada798;
-  border-bottom:1px dashed #38352c;padding:3px 0;}
-.set-stat b{color:#e9e4d6;font-weight:600;text-align:right;word-break:break-all;}
+.set-stat{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:#a8b8a0;
+  border-bottom:1px dashed #2d4a32;padding:3px 0;}
+.set-stat b{color:#f5f0e1;font-weight:600;text-align:right;word-break:break-all;}
 html[data-theme=light],html[data-theme=light] body{background:#e9edf4;}
 html[data-theme=light] :is(#topbar,#toolbar,#inspector,.modal-box){filter:invert(1) hue-rotate(180deg);}
 html[data-theme=light] :is(#topbar,#toolbar,#inspector,.modal-box) :is(img,canvas){filter:invert(1) hue-rotate(180deg);}
-.modal{position:fixed;inset:0;background:rgba(10,9,7,.8);z-index:1000;display:none;
+.modal{position:fixed;inset:0;background:rgba(5,15,8,.85);z-index:5000;display:none;
   align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px);}
 .modal.show{display:flex;}
-.modal-box{background:#1d1b15;border:1px solid #38352c;border-radius:0;padding:18px;
+.modal-box{background:#142a18;border:1px solid #2d4a32;border-radius:0;padding:18px;
   max-width:700px;width:100%;max-height:88vh;overflow-y:auto;
-  box-shadow:0 20px 60px rgba(0,0,0,.7);}
-.modal-box h3{margin:0 0 8px;font-size:15px;color:#c9a55e;}
-.modal-box p{font-size:12.5px;color:#ada798;margin:0 0 14px;line-height:1.6;}
+  box-shadow:0 20px 60px rgba(0,0,0,.8),0 0 40px rgba(196,30,58,.1);}
+.modal-box h3{margin:0 0 8px;font-size:15px;color:#f4c430;text-shadow:0 0 8px rgba(244,196,48,.3);}
+.modal-box p{font-size:12.5px;color:#a8b8a0;margin:0 0 14px;line-height:1.6;}
 .modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap;}
-.modal textarea{width:100%;background:#16140f;color:#e9e4d6;border:1px solid #38352c;
+.modal textarea{width:100%;background:#0a1a0d;color:#f5f0e1;border:1px solid #2d4a32;
   border-radius:0;padding:10px;font-family:ui-monospace,"SF Mono",Menlo,monospace;
   font-size:11px;line-height:1.5;resize:vertical;outline:none;}
-.modal textarea:focus{border-color:#c9a55e;}
-.modal .hint{font-size:11px;color:#767064;margin:6px 0 0;line-height:1.55;}
-.modal .hint code{background:#16140f;padding:1px 5px;border-radius:0;color:#c9a55e;
+.modal textarea:focus{border-color:#f4c430;box-shadow:0 0 0 2px rgba(244,196,48,.15);}
+.modal .hint{font-size:11px;color:#6a8068;margin:6px 0 0;line-height:1.55;}
+.modal .hint code{background:#0a1a0d;padding:1px 5px;border-radius:0;color:#f4c430;
   font-family:ui-monospace,monospace;}
-#customPanel{margin-top:12px;padding-top:14px;border-top:1px solid #38352c;display:none;}
+#customPanel{margin-top:12px;padding-top:14px;border-top:1px solid #2d4a32;display:none;}
 #customPanel.show{display:block;}
 #animModal .frames{display:flex;gap:6px;flex-wrap:wrap;min-height:64px;padding:8px;
-  background:#16140f;border:1px solid #38352c;border-radius:0;margin-bottom:10px;}
+  background:#0a1a0d;border:1px solid #2d4a32;border-radius:0;margin-bottom:10px;}
 #animModal .frame{position:relative;width:56px;height:56px;border-radius:0;
-  background:#1d1b15 repeating-conic-gradient(#252319 0% 25%,#1d1b15 0% 50%) 50%/8px 8px;
-  overflow:hidden;border:1px solid #38352c;}
+  background:#122418 repeating-conic-gradient(#1e3a22 0% 25%,#122418 0% 50%) 50%/8px 8px;
+  overflow:hidden;border:1px solid #2d4a32;}
 #animModal .frame img{width:100%;height:100%;object-fit:contain;}
 #animModal .frame .fdel{position:absolute;top:-4px;right:-4px;width:16px;height:16px;
-  border-radius:0;background:#2b1815;border:1px solid #522a24;color:#d98274;
+  border-radius:0;background:#3a1420;border:1px solid #c41e3a;color:#ff8fa3;
   font-size:10px;line-height:1;display:flex;align-items:center;justify-content:center;
   cursor:pointer;font-weight:700;}
 #animModal .frame .fnum{position:absolute;bottom:1px;left:3px;font-size:8px;color:#fff;
   background:rgba(0,0,0,.65);padding:0 3px;border-radius:0;}
-#animModal .empty-frame{color:#6a6458;font-size:11px;padding:20px;text-align:center;width:100%;}
+#animModal .empty-frame{color:#5a7058;font-size:11px;padding:20px;text-align:center;width:100%;}
 .sheet-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
 .sheet-grid .row > span{flex:0 0 60px;}
-.sheet-preview{background:#16140f;border:1px solid #38352c;border-radius:0;padding:6px;
+.sheet-preview{background:#0a1a0d;border:1px solid #2d4a32;border-radius:0;padding:6px;
   margin-bottom:8px;max-height:120px;overflow:auto;text-align:center;}
 .sheet-preview img{max-width:100%;max-height:100px;object-fit:contain;}
-#exportResultModal .info{background:#16140f;border:1px solid #38352c;border-radius:0;
-  padding:12px;font-size:12px;line-height:1.7;color:#ada798;margin-bottom:10px;}
-#exportResultModal .info b{color:#e9e4d6;}
+#exportResultModal .info{background:#0a1a0d;border:1px solid #2d4a32;border-radius:0;
+  padding:12px;font-size:12px;line-height:1.7;color:#a8b8a0;margin-bottom:10px;}
+#exportResultModal .info b{color:#f5f0e1;}
 #exportResultModal .code-wrap{display:none;margin-top:10px;}
 #exportResultModal .code-wrap.show{display:block;}
 #exportResultModal textarea{min-height:280px;}
-#hitboxWrap{position:relative;background:#16140f;border:1px solid #38352c;border-radius:0;
+#hitboxWrap{position:relative;background:#0a1a0d;border:1px solid #2d4a32;border-radius:0;
   padding:12px;text-align:center;overflow:auto;min-height:180px;max-height:52vh;}
 #hitboxCanvas{display:block;margin:0 auto;cursor:crosshair;image-rendering:pixelated;
-  background:#1d1b15 repeating-conic-gradient(#252319 0% 25%,#1d1b15 0% 50%) 50%/12px 12px;
-  touch-action:none;border-radius:0;box-shadow:0 0 0 1px #38352c;}
-.hitbox-list{margin-top:10px;max-height:90px;overflow-y:auto;background:#16140f;
-  border:1px solid #38352c;border-radius:0;padding:6px;font-size:11px;color:#ada798;}
+  background:#122418 repeating-conic-gradient(#1e3a22 0% 25%,#122418 0% 50%) 50%/12px 12px;
+  touch-action:none;border-radius:0;box-shadow:0 0 0 1px #2d4a32;}
+.hitbox-list{margin-top:10px;max-height:90px;overflow-y:auto;background:#0a1a0d;
+  border:1px solid #2d4a32;border-radius:0;padding:6px;font-size:11px;color:#a8b8a0;}
 .hitbox-list .hb-row{display:flex;justify-content:space-between;align-items:center;
   padding:3px 4px;border-radius:0;}
-.hitbox-list .hb-row:nth-child(odd){background:rgba(255,255,255,.02);}
-.hitbox-list .hb-row .hb-del{color:#d98274;cursor:pointer;font-weight:800;padding:0 4px;}
-
-.event-card{background:#16140f;border:1px solid #38352c;border-radius:0;padding:9px;
-  margin-bottom:9px;position:relative;box-shadow:0 0 0 1px rgba(201,165,94,.08);}
+.hitbox-list .hb-row:nth-child(odd){background:rgba(244,196,48,.04);}
+.hitbox-list .hb-row .hb-del{color:#ff8fa3;cursor:pointer;font-weight:800;padding:0 4px;}
+.event-card{background:#0a1a0d;border:1px solid #2d4a32;border-radius:0;padding:9px;
+  margin-bottom:9px;position:relative;box-shadow:0 0 0 1px rgba(244,196,48,.08);}
 .event-card .ev-head{display:flex;gap:6px;align-items:center;margin-bottom:6px;}
-.event-card .ev-head .ev-num{font-size:10px;font-weight:800;color:#c9a55e;
-  background:#252319;border-radius:0;padding:3px 6px;flex:0 0 auto;}
+.event-card .ev-head .ev-num{font-size:10px;font-weight:800;color:#f4c430;
+  background:#1e3a22;border-radius:0;padding:3px 6px;flex:0 0 auto;}
 .event-card .ev-head select{flex:1;min-width:0;}
-.event-card .ev-del{background:#2b1815;border:1px solid #522a24;color:#d98274;
+.event-card .ev-del{background:#3a1420;border:1px solid #c41e3a;color:#ff8fa3;
   border-radius:0;padding:4px 7px;font-size:11px;font-weight:800;cursor:pointer;
   flex:0 0 auto;line-height:1;}
-.event-card .ev-del:active{background:#3a201c;}
-.event-card .ev-sub{font-size:9px;color:#767064;margin:8px 0 4px;letter-spacing:.8px;
+.event-card .ev-del:active{background:#4a1a28;}
+.event-card .ev-sub{font-size:9px;color:#6a8068;margin:8px 0 4px;letter-spacing:.8px;
   text-transform:uppercase;font-weight:800;}
 .event-card .ev-row{display:flex;align-items:center;gap:6px;margin-bottom:5px;}
-.event-card .ev-row > span{flex:0 0 74px;font-size:11px;color:#ada798;}
-.event-card .ev-hint{font-size:10px;color:#ada798;line-height:1.5;padding:6px 8px;
-  background:rgba(201,165,94,.07);border-radius:0;margin-top:6px;border-left:2px solid #c9a55e;}
+.event-card .ev-row > span{flex:0 0 74px;font-size:11px;color:#a8b8a0;}
+.event-card .ev-hint{font-size:10px;color:#a8b8a0;line-height:1.5;padding:6px 8px;
+  background:rgba(244,196,48,.07);border-radius:0;margin-top:6px;border-left:2px solid #f4c430;}
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(120%);
-  background:#252319;border:1px solid #4a463a;color:#e9e4d6;padding:10px 18px;
-  border-radius:0;font-size:12.5px;font-weight:600;z-index:2000;
-  box-shadow:0 10px 30px rgba(0,0,0,.5);transition:transform .25s,opacity .25s;
-  opacity:0;pointer-events:none;max-width:90vw;text-align:center;}
+  background:#1e3a22;border:1px solid #3d6a44;color:#f5f0e1;padding:10px 18px;
+  border-radius:0;font-size:12.5px;font-weight:600;z-index:9000;
+  box-shadow:0 10px 30px rgba(0,0,0,.6),0 0 20px rgba(45,122,62,.3);
+  transition:transform .25s,opacity .25s;opacity:0;pointer-events:none;max-width:90vw;text-align:center;}
 #toast.show{transform:translateX(-50%) translateY(0);opacity:1;}
-#toast.ok{border-color:#82a76a;color:#a8c68e;}
-#toast.err{border-color:#522a24;color:#d98274;}
+#toast.ok{border-color:#2d7a3e;color:#a8d8a8;}
+#toast.err{border-color:#c41e3a;color:#ff8fa3;}
 .proj-list{max-height:46vh;overflow-y:auto;display:flex;flex-direction:column;gap:6px;margin:6px 0;}
-.proj-item{display:flex;align-items:center;gap:8px;background:#16140f;border:1px solid #38352c;
+.proj-item{display:flex;align-items:center;gap:8px;background:#0a1a0d;border:1px solid #2d4a32;
   border-radius:0;padding:10px 12px;cursor:pointer;transition:background .12s,border-color .12s;}
-.proj-item:hover{border-color:#4a463a;background:#252319;}
-.proj-item.active{border-color:#c9a55e;background:rgba(201,165,94,.08);}
-.proj-item .pi-name{flex:1;font-size:12.5px;font-weight:700;color:#e9e4d6;
+.proj-item:hover{border-color:#3d6a44;background:#1e3a22;}
+.proj-item.active{border-color:#f4c430;background:rgba(244,196,48,.08);box-shadow:0 0 10px rgba(244,196,48,.2);}
+.proj-item .pi-name{flex:1;font-size:12.5px;font-weight:700;color:#f5f0e1;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.proj-item .pi-meta{font-size:10px;color:#767064;white-space:nowrap;}
-.proj-item .pi-del{background:#2b1815;border:1px solid #522a24;color:#d98274;
+.proj-item .pi-meta{font-size:10px;color:#6a8068;white-space:nowrap;}
+.proj-item .pi-del{background:#3a1420;border:1px solid #c41e3a;color:#ff8fa3;
   border-radius:0;padding:4px 8px;font-size:11px;font-weight:800;cursor:pointer;}
-#rotate{display:none;position:fixed;inset:0;background:#16140f;z-index:9999;
+#rotate{display:none;position:fixed;inset:0;background:#0a1a0d;z-index:9999;
   align-items:center;justify-content:center;flex-direction:column;gap:14px;
-  color:#ada798;font-size:15px;text-align:center;padding:20px;}
+  color:#a8b8a0;font-size:15px;text-align:center;padding:20px;
+  background-image:radial-gradient(circle at 50% 30%,rgba(196,30,58,.18),transparent 60%);}
 #rotate .ic{font-size:46px;}
 @media (orientation:portrait){#rotate{display:flex;}}
+
+/* ============ EASTER EGG LAYERS ============ */
+#snowLayer{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:1500;display:none;}
+#snowLayer.on{display:block;}
+#windLayer{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:1501;display:none;}
+#windLayer.on{display:block;}
+#easterLayer{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:1503;display:none;}
+#easterLayer.on{display:block;}
+#burstLayer{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:1600;}
+
+.snowflake{position:absolute;top:0;left:0;color:#fff;will-change:transform;
+  font-family:system-ui,sans-serif;text-shadow:0 0 8px rgba(180,230,255,.95),0 0 2px #fff;
+  line-height:1;user-select:none;-webkit-user-select:none;}
+.wind-streak{position:absolute;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(200,240,255,.9),transparent);
+  animation:windBlow linear infinite;filter:blur(.3px);}
+@keyframes windBlow{from{transform:translateX(-160px);}to{transform:translateX(100vw);}}
+
+/* ============ GIFT EASTER BOX ============ */
+#giftEaster{position:fixed;left:50%;top:50%;z-index:1550;
+  transform:translate(-50%,-120vh) scale(0.3) rotate(-40deg);
+  opacity:0;pointer-events:none;
+  transition:transform .7s cubic-bezier(0.34,1.56,0.64,1),opacity .5s;
+  display:flex;flex-direction:column;align-items:center;gap:6px;}
+#giftEaster.show{transform:translate(-50%,-50%) scale(1) rotate(0);opacity:1;pointer-events:auto;}
+#giftEaster .gift-inner{font-size:86px;line-height:1;cursor:pointer;
+  animation:giftBob 2s ease-in-out infinite,giftPulse 1.5s ease-in-out infinite;
+  transform-origin:center;}
+@keyframes giftBob{0%,100%{transform:rotate(-5deg) translateY(0);}50%{transform:rotate(5deg) translateY(-8px);}}
+@keyframes giftPulse{
+  0%,100%{filter:drop-shadow(0 10px 20px rgba(0,0,0,.5)) drop-shadow(0 0 20px rgba(244,196,48,.6));}
+  50%{filter:drop-shadow(0 10px 20px rgba(0,0,0,.5)) drop-shadow(0 0 40px rgba(244,196,48,1)) drop-shadow(0 0 60px rgba(196,30,58,.6));}
+}
+#giftEaster .gift-hint{font-size:11px;font-weight:800;color:#f4c430;letter-spacing:.5px;
+  text-shadow:0 0 8px rgba(0,0,0,.9);padding:4px 10px;background:rgba(0,0,0,.6);
+  animation:hintPulse 1.2s ease-in-out infinite;}
+@keyframes hintPulse{0%,100%{opacity:.65;}50%{opacity:1;}}
+#giftEaster .gift-wish{display:none;width:300px;max-width:88vw;
+  padding:22px 22px 18px;background:linear-gradient(135deg,#fbf2d8 0%,#ecd9a8 100%);
+  color:#4a2f1a;font-family:Georgia,'Times New Roman',serif;border-radius:6px;
+  box-shadow:0 25px 60px rgba(0,0,0,.75),0 0 40px rgba(244,196,48,.5);
+  position:relative;animation:wishAppear .5s cubic-bezier(0.34,1.56,0.64,1);
+  transform-origin:center;cursor:pointer;}
+#giftEaster .gift-wish::before{content:'';position:absolute;inset:6px;
+  border:1px dashed rgba(74,47,26,.3);border-radius:3px;pointer-events:none;}
+#giftEaster .gift-wish::after{content:'🎄';position:absolute;top:-16px;left:50%;
+  transform:translateX(-50%);font-size:24px;filter:drop-shadow(0 2px 4px rgba(0,0,0,.4));}
+#giftEaster .wish-title{color:#a81228;font-weight:bold;font-size:13px;margin-bottom:12px;
+  text-align:center;font-family:system-ui,sans-serif;letter-spacing:.5px;position:relative;}
+#giftEaster .wish-body{font-style:italic;text-align:center;line-height:1.65;font-size:14px;
+  position:relative;}
+@keyframes wishAppear{from{transform:scale(0.5) rotate(-5deg);opacity:0;}to{transform:scale(1) rotate(0);opacity:1;}}
+
+/* ============ CHILD WISH NOTES (easter egg) ============ */
+.wish-note{position:fixed;top:0;left:50%;width:200px;padding:14px 14px 10px;
+  background:linear-gradient(135deg,#fbf2d8 0%,#ecd9a8 100%);
+  color:#4a2f1a;font-family:Georgia,'Courier New',serif;
+  font-size:12px;line-height:1.45;border-radius:2px;
+  box-shadow:0 6px 16px rgba(0,0,0,.55),inset 0 0 30px rgba(139,90,42,.08);
+  pointer-events:none;will-change:transform;
+  animation-name:wishFall;animation-timing-function:linear;animation-fill-mode:forwards;
+  animation-duration:var(--dur,18s);transform:translate(-50%,-120%);}
+.wish-note::before{content:'';position:absolute;inset:5px;
+  border:1px dashed rgba(74,47,26,.25);border-radius:1px;pointer-events:none;}
+.wish-note .wish-text{font-style:italic;position:relative;text-align:center;}
+.wish-note .wish-author{margin-top:8px;text-align:right;font-size:10px;font-weight:bold;
+  color:#8a5a2a;font-family:system-ui,sans-serif;position:relative;}
+@keyframes wishFall{
+  0%{transform:translate(-50%,-120%) translateX(0) rotate(var(--r0,-5deg));opacity:0;}
+  8%{opacity:1;}
+  50%{transform:translate(-50%,50vh) translateX(var(--sx1,0)) rotate(var(--r1,5deg));}
+  92%{opacity:1;}
+  100%{transform:translate(-50%,105vh) translateX(var(--sx2,0)) rotate(var(--r0,-5deg));opacity:0;}
+}
+/* Santa sleigh */
+.santa-sleigh{position:fixed;left:-240px;display:flex;align-items:center;gap:2px;
+  font-size:26px;pointer-events:none;will-change:transform;
+  filter:drop-shadow(0 4px 10px rgba(0,0,0,.7));
+  animation-name:santaFly;animation-timing-function:linear;animation-fill-mode:forwards;
+  animation-duration:8s;}
+.santa-sleigh span{display:inline-block;animation:santaBob 0.6s ease-in-out infinite alternate;}
+.santa-sleigh span:nth-child(2){animation-delay:.1s;}
+.santa-sleigh span:nth-child(3){animation-delay:.2s;}
+.santa-sleigh span:nth-child(4){animation-delay:.3s;}
+@keyframes santaFly{0%{transform:translate(0,0);}100%{transform:translate(calc(100vw + 500px),-30px);}}
+@keyframes santaBob{from{transform:translateY(0);}to{transform:translateY(-4px);}}
+/* Particle element base */
+.p-emoji{position:absolute;pointer-events:none;will-change:transform,opacity;
+  user-select:none;-webkit-user-select:none;line-height:1;top:0;left:0;}
 </style>
 </head>
 <body>
 <div id="app">
   <header id="topbar">
-    <div class="logo"><b>MNHR</b><span>Engine</span><i class="ver">Alpha 9.0.1</i></div>
+    <div class="logo" id="logoBtn" title="Bấm 3 lần để bật/tắt tuyết 🎄">
+      <span style="font-size:15px;font-weight:400;">🎄</span><b>MNHR</b><span>Engine</span><i class="ver">9.0.1</i>
+    </div>
     <div class="spacer"></div>
     <button id="btnProjects" class="btn">Dự án</button>
     <button id="btnUndo" class="btn" disabled>Undo</button>
@@ -265,7 +407,7 @@ html[data-theme=light] :is(#topbar,#toolbar,#inspector,.modal-box) :is(img,canva
     <button id="btnSave" class="btn">Lưu</button>
     <button id="btnPlay" class="btn primary">▶ Chạy</button>
     <button id="btnStop" class="btn" disabled>■ Dừng</button>
-    <button id="btnExport" class="btn accent">Xuất game</button>
+    <button id="btnExport" class="btn accent">🎁 Xuất game</button>
     <button id="btnSettings" class="btn">Cài đặt</button>
     <button id="btnInspector" class="btn icon">☰</button>
   </header>
@@ -281,7 +423,12 @@ html[data-theme=light] :is(#topbar,#toolbar,#inspector,.modal-box) :is(img,canva
     </nav>
 
     <section id="stageWrap">
+      <div id="xmasLights" aria-hidden="true"></div>
       <canvas id="stage"></canvas>
+      <div class="xmas-corner xmas-tl" aria-hidden="true">🎄</div>
+      <div class="xmas-corner xmas-tr" aria-hidden="true">⭐</div>
+      <div class="xmas-corner xmas-bl" aria-hidden="true">🎁</div>
+      <div class="xmas-corner xmas-br" aria-hidden="true">🔔</div>
       <div id="camInfo">Camera: 0, 0</div>
       <button id="btnQuickBlock" class="fab" title="Thêm khối">＋</button>
       <button id="btnFullscreen" class="fab fs" title="Toàn màn hình">⛶</button>
@@ -299,26 +446,23 @@ html[data-theme=light] :is(#topbar,#toolbar,#inspector,.modal-box) :is(img,canva
   <div class="modal-box" style="max-width:780px;">
     <h3 id="hitboxTitle">Chỉnh Hitbox</h3>
     <p>Vẽ các hình chữ nhật để định nghĩa hitbox. Hoặc dùng <b>Auto-detect PNG</b>: khi bật "mỗi frame một hitbox", mỗi frame được nhận diện riêng. Hitbox tự lật theo hướng nhân vật.</p>
-    <div id="hitboxWrap">
-      <canvas id="hitboxCanvas" width="400" height="300"></canvas>
-    </div>
+    <div id="hitboxWrap"><canvas id="hitboxCanvas" width="400" height="300"></canvas></div>
     <div id="hitboxList" class="hitbox-list"></div>
     <div class="modal-actions" style="margin-top:10px;justify-content:flex-start;flex-wrap:wrap;gap:8px;align-items:center;">
       <button id="btnHitboxAuto" class="btn accent">Auto-detect PNG</button>
       <button id="btnHitboxFull" class="btn">Full box</button>
       <button id="btnHitboxClear" class="btn danger">Xoá tất cả</button>
-      <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:#ada798;cursor:pointer;">
-        <input id="hitboxAllFrames" type="checkbox" checked
-          style="accent-color:#c9a55e;width:16px;height:16px;">
+      <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:#a8b8a0;cursor:pointer;">
+        <input id="hitboxAllFrames" type="checkbox" checked style="accent-color:#f4c430;width:16px;height:16px;">
         Mỗi frame một hitbox (per-frame)
       </label>
     </div>
     <div style="display:flex;gap:8px;margin-top:10px;align-items:center;flex-wrap:wrap;">
-      <span style="font-size:11px;color:#ada798;">Cell size:</span>
+      <span style="font-size:11px;color:#a8b8a0;">Cell size:</span>
       <input id="hitboxCell" type="number" class="inp" value="16" min="0.25" max="128" step="any" style="width:70px;">
-      <span style="font-size:11px;color:#ada798;">Alpha &gt;</span>
+      <span style="font-size:11px;color:#a8b8a0;">Alpha &gt;</span>
       <input id="hitboxAlpha" type="number" class="inp" value="10" min="0" max="255" style="width:70px;">
-      <span style="font-size:11px;color:#767064;" id="hitboxInfo"></span>
+      <span style="font-size:11px;color:#6a8068;" id="hitboxInfo"></span>
     </div>
     <div class="modal-actions">
       <button id="btnHitboxCancel" class="btn">Huỷ</button>
@@ -341,8 +485,8 @@ html[data-theme=light] :is(#topbar,#toolbar,#inspector,.modal-box) :is(img,canva
       <button id="btnReverseFrames" class="btn">↔ Đảo</button>
       <button id="btnClearFrames" class="btn danger">Xoá hết</button>
     </div>
-    <div id="sheetPanel" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid #38352c;">
-      <p style="color:#c9a55e;font-weight:700;font-size:12px;margin-bottom:8px;">Slicing spritesheet</p>
+    <div id="sheetPanel" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid #2d4a32;">
+      <p style="color:#f4c430;font-weight:700;font-size:12px;margin-bottom:8px;">Slicing spritesheet</p>
       <div id="sheetPreview" class="sheet-preview"></div>
       <div class="sheet-grid">
         <div class="row"><span>Frame W</span><input id="sheetW" type="number" class="inp" value="64"></div>
@@ -357,15 +501,13 @@ html[data-theme=light] :is(#topbar,#toolbar,#inspector,.modal-box) :is(img,canva
         <button id="btnDoSlice" class="btn primary">Cắt frames</button>
       </div>
     </div>
-    <div style="display:flex;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid #38352c;">
+    <div style="display:flex;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid #2d4a32;">
       <div class="row" style="flex:1;margin:0;"><span style="flex:0 0 40px;">FPS</span><input id="animFps" type="number" class="inp" value="8" min="1" max="60"></div>
       <div class="row" style="flex:1;margin:0;"><span style="flex:0 0 50px;">Loop</span>
-        <div><input id="animLoop" type="checkbox" checked style="width:18px;height:18px;accent-color:#c9a55e;"></div>
+        <div><input id="animLoop" type="checkbox" checked style="width:18px;height:18px;accent-color:#f4c430;"></div>
       </div>
     </div>
-    <div class="modal-actions">
-      <button id="btnAnimDone" class="btn primary">✓ Xong</button>
-    </div>
+    <div class="modal-actions"><button id="btnAnimDone" class="btn primary">✓ Xong</button></div>
   </div>
 </div>
 
@@ -379,9 +521,7 @@ html[data-theme=light] :is(#topbar,#toolbar,#inspector,.modal-box) :is(img,canva
       <button id="btnYesCustom" class="btn accent">Có, thêm JS điều khiển</button>
     </div>
     <div id="customPanel">
-      <p style="margin-top:14px;margin-bottom:6px;color:#c9a55e;font-weight:700;font-size:12px;">
-        Điều khiển tùy chỉnh (chạy mỗi frame):
-      </p>
+      <p style="margin-top:14px;margin-bottom:6px;color:#f4c430;font-weight:700;font-size:12px;">Điều khiển tùy chỉnh (chạy mỗi frame):</p>
       <textarea id="customCode" spellcheck="false" placeholder="// Biến: state, keys, dt, RT, VW, VH
 if (keys['z'] || keys['Z']) keys['Fire'] = true;"></textarea>
       <p class="hint">Gán <code>keys['ArrowLeft'] = true</code> để giả lập bấm phím.</p>
@@ -409,14 +549,12 @@ if (keys['z'] || keys['Z']) keys['Fire'] = true;"></textarea>
     <div id="resCodeWrap" class="code-wrap">
       <p class="hint" style="margin-bottom:6px;">Bản 1 file (ảnh nhúng Base64) — copy, lưu thành <code>index.html</code> rồi mở bằng trình duyệt.</p>
       <textarea id="resCode" readonly spellcheck="false"></textarea>
-      <div class="modal-actions">
-        <button id="btnResSelectAll" class="btn">Chọn tất cả</button>
-      </div>
+      <div class="modal-actions"><button id="btnResSelectAll" class="btn">Chọn tất cả</button></div>
     </div>
   </div>
 </div>
 
-<!-- Projects modal -->
+<!-- Settings modal -->
 <div id="settingsModal" class="modal">
   <div class="modal-box" style="max-width:540px;">
     <h3>Cài đặt</h3>
@@ -452,9 +590,523 @@ if (keys['z'] || keys['Z']) keys['Fire'] = true;"></textarea>
 
 <div id="toast"></div>
 <div id="imgCache" style="position:fixed;bottom:0;left:0;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none;z-index:-1;"></div>
-<div id="rotate"><div class="ic">↶</div><div>Vui lòng xoay ngang màn hình<br>để dùng MNHR-engine</div></div>
+
+<!-- Easter egg layers -->
+<div id="snowLayer" aria-hidden="true"></div>
+<div id="windLayer" aria-hidden="true"></div>
+<div id="easterLayer" aria-hidden="true"></div>
+<div id="burstLayer" aria-hidden="true"></div>
+
+<!-- Gift easter box -->
+<div id="giftEaster" aria-live="polite">
+  <div class="gift-inner">🎁</div>
+  <div class="gift-hint">Bấm để mở</div>
+  <div class="gift-wish">
+    <div class="wish-title">🎄 Lời chúc Giáng Sinh 🎄</div>
+    <div class="wish-body"></div>
+  </div>
+</div>
+
+<div id="rotate">
+  <div class="ic">❄</div>
+  <div>Vui lòng xoay ngang màn hình<br>để dùng MNHR-engine</div>
+  <div style="font-size:12px;color:#f4c430;margin-top:4px;text-shadow:0 0 10px rgba(244,196,48,.5);">🎄 Merry Christmas 🎄</div>
+</div>
 
 <script src="engine.js"></script>
 <script>MNHR.Editor.init();</script>
+<script>
+/* ============================================================
+   🎄 CHRISTMAS DECORATION SYSTEM
+   - Particle engine dùng chung: burst / snowfall-from-button / gift
+   - Easter egg: 3 click logo → snow + wind + wish notes + santa
+   - Gift box easter egg: 10s đầu rồi 2-3 phút một lần
+   ============================================================ */
+(function(){
+  var logo    = document.getElementById('logoBtn');
+  var snowL   = document.getElementById('snowLayer');
+  var windL   = document.getElementById('windLayer');
+  var easterL = document.getElementById('easterLayer');
+  var burstL  = document.getElementById('burstLayer');
+  var giftBox = document.getElementById('giftEaster');
+  if(!logo || !snowL || !windL || !easterL || !burstL || !giftBox) return;
+
+  /* ---------- Helper: generate xmas light bulbs ---------- */
+  var lightsEl = document.getElementById('xmasLights');
+  if(lightsEl){
+    for(var L=0; L<26; L++){
+      var bulb = document.createElement('span');
+      bulb.style.animationDelay = (L*0.09) + 's';
+      lightsEl.appendChild(bulb);
+    }
+  }
+
+  /* ---------- Toast ---------- */
+  function toastMsg(msg, ok){
+    var t = document.getElementById('toast');
+    if(!t) return;
+    t.textContent = msg;
+    t.className = 'show' + (ok ? ' ok' : '');
+    clearTimeout(t._tm);
+    t._tm = setTimeout(function(){ t.className = ''; }, 2400);
+  }
+
+  /* ============================================================
+     PARTICLE ENGINE — physics-based, dùng cho burst & topbar fx
+     ============================================================ */
+  var particles = [];
+  var particleRaf = null;
+  var particleLastT = 0;
+  var GRAVITY_DEFAULT = 1200;
+
+  function addParticle(el, opts){
+    el.classList.add('p-emoji');
+    el.style.left = opts.x + 'px';
+    el.style.top  = opts.y + 'px';
+    el.style.fontSize = (opts.size || 16) + 'px';
+    if(opts.shadow) el.style.filter = opts.shadow;
+    burstL.appendChild(el);
+    particles.push({
+      el: el,
+      x: 0, y: 0,
+      vx: opts.vx || 0,
+      vy: opts.vy || 0,
+      rot: opts.rot || 0,
+      vr: opts.vr || 0,
+      life: 0,
+      ttl: opts.ttl || 2,
+      gravity: (opts.gravity != null) ? opts.gravity : GRAVITY_DEFAULT,
+      drag: opts.drag != null ? opts.drag : 0.985
+    });
+    if(!particleRaf){
+      particleLastT = 0;
+      particleRaf = requestAnimationFrame(particleTick);
+    }
+  }
+
+  function particleTick(t){
+    if(!particleLastT) particleLastT = t;
+    var dt = Math.min(0.05, (t - particleLastT)/1000);
+    particleLastT = t;
+    var alive = 0;
+    for(var i=0; i<particles.length; i++){
+      var p = particles[i];
+      if(p.dead) continue;
+      p.life += dt;
+      if(p.life > p.ttl){
+        p.el.remove();
+        p.dead = true;
+        continue;
+      }
+      alive++;
+      // physics
+      p.vy += p.gravity * dt;
+      var dragStep = Math.pow(p.drag, dt * 60);
+      p.vx *= dragStep;
+      p.vy *= dragStep;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.rot += p.vr * dt;
+      // alpha fade ở 30% cuối
+      var alpha = 1;
+      if(p.life > p.ttl * 0.7){
+        alpha = 1 - (p.life - p.ttl*0.7) / (p.ttl*0.3);
+      }
+      p.el.style.transform =
+        'translate(-50%,-50%) translate(' + p.x.toFixed(1) + 'px,' + p.y.toFixed(1) + 'px) rotate(' +
+        p.rot.toFixed(1) + 'deg)';
+      p.el.style.opacity = alpha.toFixed(3);
+    }
+    if(alive > 0){
+      particleRaf = requestAnimationFrame(particleTick);
+    } else {
+      particleRaf = null;
+      particleLastT = 0;
+      particles = [];
+    }
+  }
+
+  /* ============================================================
+     BURST 10 EMOJI — physics parabol (curved + real fall)
+     ============================================================ */
+  function burst(x, y){
+    var emojis = ['🎁','🎁','🎁','❄️','❄️','🎄','🔔','⭐','⛄','🧦'];
+    for(var i=0; i<10; i++){
+      var el = document.createElement('div');
+      el.textContent = emojis[(Math.random()*emojis.length)|0];
+      var ang = (i / 10) * Math.PI * 2 + (Math.random()-0.5)*0.6;
+      var speed = 220 + Math.random()*180;
+      addParticle(el, {
+        x: x, y: y,
+        vx: Math.cos(ang) * speed * 0.55,
+        vy: Math.sin(ang) * speed * 0.35 - 170 - Math.random()*160,
+        rot: 0,
+        vr: (Math.random()-0.5) * 540,
+        size: 14 + Math.random()*12,
+        ttl: 2.0 + Math.random()*0.9,
+        gravity: 1250,
+        drag: 0.972,
+        shadow: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))'
+      });
+    }
+  }
+
+  /* ============================================================
+     TOPBAR BUTTON: snow + 1 gift rơi từ nút
+     ============================================================ */
+  function topbarSnow(x, y){
+    for(var i=0; i<6; i++){
+      var el = document.createElement('div');
+      el.textContent = '❄';
+      el.style.color = '#fff';
+      el.style.textShadow = '0 0 6px rgba(180,230,255,0.9),0 0 2px #fff';
+      addParticle(el, {
+        x: x + (Math.random()-0.5)*26,
+        y: y,
+        vx: (Math.random()-0.5)*90,
+        vy: 40 + Math.random()*70,
+        vr: (Math.random()-0.5)*240,
+        size: 8 + Math.random()*8,
+        ttl: 1.9 + Math.random()*1.0,
+        gravity: 340,
+        drag: 0.992
+      });
+    }
+  }
+  function topbarGift(x, y){
+    var el = document.createElement('div');
+    el.textContent = '🎁';
+    addParticle(el, {
+      x: x, y: y,
+      vx: (Math.random()-0.5)*70,
+      vy: 70 + Math.random()*70,
+      rot: 0,
+      vr: (Math.random()-0.5)*360,
+      size: 24,
+      ttl: 2.6 + Math.random()*0.6,
+      gravity: 850,
+      drag: 0.995,
+      shadow: 'drop-shadow(0 4px 8px rgba(0,0,0,0.5)) drop-shadow(0 0 8px rgba(244,196,48,0.5))'
+    });
+  }
+
+  /* ============================================================
+     GLOBAL CLICK HANDLER
+     - topbar buttons → snow + gift (luôn, dù easter egg bật/tắt)
+     - các nút khác  → 10 emoji burst (chỉ khi easter egg tắt)
+     ============================================================ */
+  document.addEventListener('click', function(e){
+    if(e.button !== 0) return;
+    if(e.target.closest('#logoBtn')) return;
+    if(e.target.closest('#giftEaster')) return;
+
+    var topbarBtn = e.target.closest('#topbar .btn, #topbar button');
+    if(topbarBtn){
+      var r = topbarBtn.getBoundingClientRect();
+      topbarSnow(r.left + r.width/2, r.bottom);
+      topbarGift(r.left + r.width/2, r.bottom);
+      return;
+    }
+
+    if(isWinterOn) return;
+
+    var btn = e.target.closest(
+      'button,.btn,.tool,.fab,.tab,.btn-mini,.layer-card,.layer-add,' +
+      '.anim-slot,.proj-item,.del,.fdel,.hb-del,.ev-del,.pi-del'
+    );
+    if(!btn) return;
+    burst(e.clientX, e.clientY);
+  }, true);
+
+  /* ============================================================
+     EASTER EGG: toggle tuyết + gió + santa + wish notes
+     ============================================================ */
+  var logoClicks = 0, logoClickTm = null;
+  var isWinterOn = false;
+  var flakes = [];
+  var winterRaf = null;
+  var winterPhase = 0;
+  var winterLastT = 0;
+  var noteTimer = null, santaTimer = null;
+
+  logo.addEventListener('click', function(){
+    // visual feedback
+    try {
+      logo.animate(
+        [{transform:'scale(1)'},{transform:'scale(0.9)'},{transform:'scale(1)'}],
+        {duration:200, easing:'ease-out'}
+      );
+    } catch(_) {}
+
+    logoClicks++;
+    clearTimeout(logoClickTm);
+    logoClickTm = setTimeout(function(){ logoClicks = 0; }, 1400);
+    if(logoClicks >= 3){
+      logoClicks = 0;
+      isWinterOn = !isWinterOn;
+      if(isWinterOn) startWinter();
+      else            stopWinter();
+    }
+  });
+
+  function startWinter(){
+    snowL.classList.add('on');
+    windL.classList.add('on');
+    easterL.classList.add('on');
+    spawnFlakes(70);
+    spawnWind(14);
+    winterLastT = 0;
+    if(!winterRaf) winterRaf = requestAnimationFrame(winterTick);
+    scheduleNote();
+    scheduleSanta();
+    // celebratory bursts
+    burst(window.innerWidth/2, window.innerHeight/3);
+    setTimeout(function(){ burst(window.innerWidth/2, window.innerHeight/2); }, 220);
+    toastMsg('🎄❄️ Merry Christmas! Tuyết & gió đang thổi…', true);
+  }
+
+  function stopWinter(){
+    snowL.classList.remove('on');
+    windL.classList.remove('on');
+    easterL.classList.remove('on');
+    snowL.innerHTML = '';
+    windL.innerHTML = '';
+    easterL.innerHTML = '';
+    flakes.length = 0;
+    if(winterRaf){ cancelAnimationFrame(winterRaf); winterRaf = null; }
+    if(noteTimer){ clearTimeout(noteTimer); noteTimer = null; }
+    if(santaTimer){ clearTimeout(santaTimer); santaTimer = null; }
+    toastMsg('❄️ Đã tắt tuyết & gió', false);
+  }
+
+  function spawnFlakes(n){
+    snowL.innerHTML = '';
+    flakes = [];
+    var glyphs = ['❄','❅','❆','✻','✼','❉','*'];
+    var W = window.innerWidth, H = window.innerHeight;
+    for(var i=0;i<n;i++){
+      var el = document.createElement('div');
+      el.className = 'snowflake';
+      el.textContent = glyphs[(Math.random()*glyphs.length)|0];
+      el.style.fontSize = (8 + Math.random()*18) + 'px';
+      el.style.opacity = (0.55 + Math.random()*0.45).toFixed(2);
+      snowL.appendChild(el);
+      flakes.push({
+        el: el, x: Math.random()*W, y: -Math.random()*H,
+        vy: 25 + Math.random()*70,
+        sway: Math.random()*Math.PI*2,
+        swayAmp: 15 + Math.random()*40,
+        swaySpeed: 0.6 + Math.random()*1.6
+      });
+    }
+  }
+
+  function spawnWind(n){
+    windL.innerHTML = '';
+    for(var i=0;i<n;i++){
+      var s = document.createElement('div');
+      s.className = 'wind-streak';
+      s.style.top = (Math.random()*100) + 'vh';
+      s.style.width = (40 + Math.random()*140) + 'px';
+      s.style.opacity = (0.2 + Math.random()*0.55).toFixed(2);
+      s.style.animationDuration = (1.1 + Math.random()*1.6) + 's';
+      s.style.animationDelay = (-Math.random()*3) + 's';
+      windL.appendChild(s);
+    }
+  }
+
+  function winterTick(t){
+    if(!winterLastT) winterLastT = t;
+    var dt = Math.min(0.05, (t - winterLastT)/1000);
+    winterLastT = t;
+    winterPhase += dt;
+    var windPower = 90 + Math.sin(winterPhase*0.7)*50 + Math.random()*35;
+    var W = window.innerWidth, H = window.innerHeight;
+    for(var i=0;i<flakes.length;i++){
+      var f = flakes[i];
+      f.sway += dt * f.swaySpeed;
+      f.x += (windPower + Math.sin(f.sway) * f.swayAmp) * dt;
+      f.y += f.vy * dt;
+      if(f.y > H + 30){ f.y = -30; f.x = Math.random()*W; }
+      if(f.x > W + 40){ f.x = -40; }
+      if(f.x < -60){ f.x = W + 20; }
+      f.el.style.transform =
+        'translate3d(' + f.x.toFixed(1) + 'px,' + f.y.toFixed(1) + 'px,0) rotate(' +
+        ((f.sway*70)%360).toFixed(0) + 'deg)';
+    }
+    winterRaf = requestAnimationFrame(winterTick);
+  }
+
+  /* ---- Wish notes (trẻ em) ---- */
+  var WISHES = [
+    {text:"Con mong ông già Noel cho con một chiếc xe đạp mới ạ!", author:"Minh, 6 tuổi"},
+    {text:"Mong cả nhà con luôn vui vẻ, khỏe mạnh 🌟", author:"Linh, 8 tuổi"},
+    {text:"Con ước có một chú cún con để chơi cùng 🐶", author:"An, 7 tuổi"},
+    {text:"Ước gì bố con đi làm xa được về nhà với con 🤗", author:"Hùng, 9 tuổi"},
+    {text:"Con chỉ cần mẹ con khỏe lại thôi ạ ❤️", author:"Mai, 8 tuổi"},
+    {text:"Con xin ông cho em con hết bệnh 🙏", author:"Tí, 5 tuổi"},
+    {text:"Mong có thật nhiều kẹo để chia cho các bạn 🍬", author:"Vy, 7 tuổi"},
+    {text:"Con ước được gặp ông già Noel một lần 🎅", author:"Nam, 6 tuổi"},
+    {text:"Con mơ có bộ lego thật to để xây lâu đài 🏰", author:"Bảo, 8 tuổi"},
+    {text:"Mong mùa đông này con có áo ấm mới 🧥", author:"Thảo, 7 tuổi"},
+    {text:"Con chúc ông và các chú tuần lộc khỏe mạnh 🦌", author:"Khánh, 6 tuổi"},
+    {text:"Con muốn có thật nhiều bạn để cùng chơi 🎠", author:"My, 7 tuổi"},
+    {text:"Con ước được ăn bánh kem thật to cùng cả nhà 🎂", author:"Bống, 6 tuổi"}
+  ];
+
+  function scheduleNote(){
+    if(!isWinterOn) return;
+    var delay = 7000 + Math.random()*7000;
+    noteTimer = setTimeout(function(){
+      if(!isWinterOn) return;
+      spawnNote();
+      scheduleNote();
+    }, delay);
+  }
+
+  function spawnNote(){
+    var w = WISHES[(Math.random()*WISHES.length)|0];
+    var el = document.createElement('div');
+    el.className = 'wish-note';
+    el.innerHTML = '<div class="wish-text">' + w.text + '</div>' +
+                   '<div class="wish-author">— ' + w.author + '</div>';
+    el.style.left = (12 + Math.random()*70) + '%';
+    var dur = 16 + Math.random()*8;
+    el.style.setProperty('--dur', dur + 's');
+    el.style.setProperty('--sx1', ((Math.random()-0.5)*120).toFixed(1) + 'px');
+    el.style.setProperty('--sx2', ((Math.random()-0.5)*120).toFixed(1) + 'px');
+    el.style.setProperty('--r0', ((Math.random()-0.5)*20).toFixed(1) + 'deg');
+    el.style.setProperty('--r1', ((Math.random()-0.5)*20).toFixed(1) + 'deg');
+    easterL.appendChild(el);
+    el.addEventListener('animationend', function(){ el.remove(); });
+  }
+
+  /* ---- Santa ---- */
+  function scheduleSanta(){
+    if(!isWinterOn) return;
+    var delay = 22000 + Math.random()*20000;
+    santaTimer = setTimeout(function(){
+      if(!isWinterOn) return;
+      spawnSanta();
+      scheduleSanta();
+    }, delay);
+  }
+  function spawnSanta(){
+    var el = document.createElement('div');
+    el.className = 'santa-sleigh';
+    el.innerHTML = '<span>🦌</span><span>🦌</span><span>🛷</span><span>🎅</span>';
+    el.style.top = (8 + Math.random()*20) + 'vh';
+    var dur = 7 + Math.random()*4;
+    el.style.animationDuration = dur + 's';
+    easterL.appendChild(el);
+    var numGifts = 2 + Math.floor(Math.random()*3);
+    for(var i=0;i<numGifts;i++){
+      (function(idx){
+        var dropAt = (0.2 + idx*0.22 + Math.random()*0.1) * dur * 1000;
+        setTimeout(function(){
+          if(!isWinterOn) return;
+          var r = el.getBoundingClientRect();
+          dropGiftFromSanta(r.left + r.width/2, r.top + r.height);
+        }, dropAt);
+      })(i);
+    }
+    setTimeout(function(){ el.remove(); }, dur*1000 + 500);
+  }
+  function dropGiftFromSanta(x, y){
+    var el = document.createElement('div');
+    el.textContent = ['🎁','🎁','🧸','🎀'][(Math.random()*4)|0];
+    el.style.filter = 'drop-shadow(0 4px 8px rgba(0,0,0,.6))';
+    el.style.fontSize = '24px';
+    easterL.appendChild(el);
+    el.style.position = 'fixed';
+    el.style.left = x + 'px';
+    el.style.top  = y + 'px';
+    el.style.pointerEvents = 'none';
+    el.style.transition = 'transform 2.6s cubic-bezier(.3,.7,.6,1), opacity 2.6s ease-in';
+    el.style.willChange = 'transform, opacity';
+    requestAnimationFrame(function(){
+      el.style.transform = 'translate(' + ((Math.random()-0.5)*100) + 'px, 100vh) rotate(' + ((Math.random()-0.5)*720) + 'deg)';
+      el.style.opacity = '0';
+    });
+    setTimeout(function(){ el.remove(); }, 3000);
+  }
+
+  /* ============================================================
+     GIFT BOX EASTER — timer 10s đầu, rồi 2-3 phút một lần
+     ============================================================ */
+  var CHRISTMAS_WISHES = [
+    "Chúc bạn một Giáng Sinh an lành, ấm áp bên gia đình và những người thân yêu!",
+    "Cầu mong mọi điều tốt đẹp nhất sẽ đến với bạn trong mùa Noel này.",
+    "Chúc bạn có một mùa Giáng Sinh tràn ngập niềm vui, tiếng cười và tình yêu thương.",
+    "Mong rằng phép màu Giáng Sinh sẽ đến với bạn và những người bạn yêu quý.",
+    "Chúc bạn năm mới an khang thịnh vượng, vạn sự như ý, vạn điều may mắn!",
+    "Giáng Sinh an lành — Hạnh phúc ngập tràn — Yêu thương chan hoà — Bình an mãi mãi.",
+    "Ước gì mọi ước mơ của bạn đều thành hiện thực trong mùa Giáng Sinh kỳ diệu này.",
+    "Chúc bạn và gia đình có một đêm Giáng Sinh ấm áp, ngọt ngào như vị bánh kem.",
+    "Mong ánh sáng của ngôi sao Giáng Sinh sẽ soi đường dẫn lối cho bạn đến với hạnh phúc.",
+    "Chúc bạn mùa Noel này ngập tràn quà tặng, niềm vui và những bất ngờ thú vị!"
+  ];
+
+  var giftHideTm = null;
+  var giftOpened = false;
+  var giftWishBody = giftBox.querySelector('.wish-body');
+  var giftInner    = giftBox.querySelector('.gift-inner');
+  var giftWishEl   = giftBox.querySelector('.gift-wish');
+  var giftHintEl   = giftBox.querySelector('.gift-hint');
+
+  function showGiftBox(){
+    giftOpened = false;
+    giftInner.style.display = 'block';
+    giftWishEl.style.display = 'none';
+    giftHintEl.style.display = 'block';
+    if(giftWishBody) giftWishBody.textContent = '';
+    giftBox.classList.add('show');
+    clearTimeout(giftHideTm);
+    giftHideTm = setTimeout(hideGiftBox, 7000);
+  }
+  function hideGiftBox(){
+    giftBox.classList.remove('show');
+    clearTimeout(giftHideTm);
+    giftHideTm = null;
+  }
+  function openGiftBox(){
+    if(giftOpened) return;
+    giftOpened = true;
+    clearTimeout(giftHideTm);
+
+    var w = CHRISTMAS_WISHES[(Math.random()*CHRISTMAS_WISHES.length)|0];
+    if(giftWishBody) giftWishBody.textContent = w;
+    giftInner.style.display = 'none';
+    giftHintEl.style.display = 'none';
+    giftWishEl.style.display = 'block';
+
+    // burst nhỏ tại tâm gift
+    var rect = giftBox.getBoundingClientRect();
+    burst(rect.left + rect.width/2, rect.top + rect.height/2);
+
+    giftHideTm = setTimeout(hideGiftBox, 8000);
+  }
+
+  giftBox.addEventListener('click', function(e){
+    e.stopPropagation();
+    if(!giftOpened) openGiftBox();
+    else hideGiftBox();
+  });
+
+  // Timer: 10s đầu → chắc chắn hiện, sau đó 2-3 phút
+  setTimeout(function(){
+    showGiftBox();
+    function loopGift(){
+      var delay = 120000 + Math.random()*60000;
+      setTimeout(function(){
+        showGiftBox();
+        loopGift();
+      }, delay);
+    }
+    loopGift();
+  }, 10000);
+
+})();
+</script>
 </body>
 </html>
