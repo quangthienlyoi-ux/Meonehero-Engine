@@ -13,9 +13,9 @@
 
 - Logs Alpha 7 (20/10/2026):
 
-- Logs Alpha 7.5 Patch (21/10/2026)
+- Logs Alpha 7.5 [PATCH UPDATE) (21/10/2026)
 
-- Logs Alpha 7.5 Remake (25/10/2026)
+- Logs Alpha 7.5 [REMAKE UPDATE] (25/10/2026)
 
 - Logs Alpha 8.0 (28/10/2026)
 
@@ -25,7 +25,9 @@
 
 - Logs Alpha 8.7.5 (7/11/2026)
 
-- Logs Alpha 9.0.0 (13/11/2026)
+- Logs Alpha 9.0.0 [BIG UPDATE] (13/11/2026)
+
+- Logs Alpha 9.0.1 [PATCH UPDATE] (14/11/2026)
 
 - BETA X.X (XX/XX/2026) ?
 
@@ -38,9 +40,6 @@
 - Note: Thực sụ có người làm Game Engine 2D in BIG 2026? Kệ đi, dù sao thì đây là 1 tác phẩm được tạo ra để Châm Biếm các Game Engine 3D AAA
 
 - Note: À mà nếu mọi người gặp lỗi vật lý ở Auto-Dedect-PNG Per-Frame bị lỗi thì mọi người đừng supprot nhé, Đấy không phải lỗi, đấy là tính năng đấy. (Joke)
-
----
-[preview](https://i.postimg.cc/y8nSYhbC/Du-an-moi-19-7C8AAC9.gif)
 
 ---
 [Copyright 2026 (c) Meonehero]
