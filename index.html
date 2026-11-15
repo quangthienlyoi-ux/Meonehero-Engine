@@ -21,11 +21,20 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0a1a0d;color:#f5f0e1;
 #topbar::-webkit-scrollbar{display:none;}
 .logo{display:flex;gap:4px;font-size:13px;color:#a8b8a0;white-space:nowrap;
   cursor:pointer;transition:filter .15s,transform .1s;align-items:center;}
-.logo:hover{filter:brightness(1.25);}
+.logo:hover{filter:brightness(1.2);}
 .logo:active{transform:scale(.97);}
 .logo b{color:#f4c430;font-weight:800;text-shadow:0 0 8px rgba(244,196,48,.6),0 0 16px rgba(244,196,48,.3);}
 .logo span{color:#dc2626;font-weight:700;text-shadow:0 0 6px rgba(220,38,38,.4);}
 .logo .ver{font-style:normal;font-size:10px;color:#6a8068;align-self:flex-end;margin-left:4px;}
+/* Christmas emoji strip in topbar */
+.xmas-deco{font-size:14px;display:flex;gap:3px;padding:0 4px;white-space:nowrap;align-items:center;flex:0 0 auto;}
+.xmas-deco span{display:inline-block;animation:twinkle 3s ease-in-out infinite;line-height:1;}
+.xmas-deco span:nth-child(2){animation-delay:.4s;}
+.xmas-deco span:nth-child(3){animation-delay:.8s;}
+.xmas-deco span:nth-child(4){animation-delay:1.2s;}
+.xmas-deco span:nth-child(5){animation-delay:1.6s;}
+.xmas-deco span:nth-child(6){animation-delay:2s;}
+@keyframes twinkle{0%,100%{opacity:.7;transform:scale(1);}50%{opacity:1;transform:scale(1.18);}}
 .spacer{flex:1;min-width:0;}
 .btn{background:#1e3a22;border:1px solid #2d4a32;color:#f5f0e1;border-radius:0;
   padding:7px 10px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;
@@ -66,43 +75,20 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0a1a0d;color:#f5f0e1;
     radial-gradient(1px 1px at 250px 140px,rgba(255,255,255,.45),transparent);
   background-size:300px 300px;animation:snowfall 30s linear infinite;opacity:.6;}
 @keyframes snowfall{from{background-position:0 0;}to{background-position:0 300px;}}
-/* Twinkling stars overlay */
-#stageWrap::after{content:'';position:absolute;inset:0;pointer-events:none;z-index:2;
-  background-image:
-    radial-gradient(1.6px 1.6px at 12% 18%,rgba(255,240,200,.95),transparent),
-    radial-gradient(1.2px 1.2px at 28% 62%,rgba(255,255,255,.9),transparent),
-    radial-gradient(1.6px 1.6px at 44% 22%,rgba(255,240,200,.95),transparent),
-    radial-gradient(1.2px 1.2px at 58% 72%,rgba(255,255,255,.85),transparent),
-    radial-gradient(1.6px 1.6px at 72% 34%,rgba(255,240,200,.95),transparent),
-    radial-gradient(1.2px 1.2px at 86% 58%,rgba(255,255,255,.85),transparent),
-    radial-gradient(1.6px 1.6px at 91% 82%,rgba(255,240,200,.95),transparent),
-    radial-gradient(1.2px 1.2px at 8% 88%,rgba(255,255,255,.85),transparent);
-  animation:twinkleStars 4.2s ease-in-out infinite;opacity:.45;}
-@keyframes twinkleStars{0%,100%{opacity:.25;filter:blur(0);}50%{opacity:.7;filter:blur(.3px);}}
 #stageWrap:fullscreen{background:#000;padding:0;}
 #stage{display:block;border-radius:0;position:relative;z-index:1;
   box-shadow:0 0 0 1px #2d4a32,0 10px 40px rgba(0,0,0,.7),0 0 40px rgba(196,30,58,.12);
   touch-action:none;background:#1a2b1f;}
 #stageWrap:fullscreen #stage{border-radius:0;box-shadow:none;}
-/* Christmas lights strip at top of stage */
-#xmasLights{position:absolute;top:0;left:0;right:0;height:16px;z-index:3;
-  display:flex;justify-content:space-around;padding:0 14px;pointer-events:none;}
-#xmasLights::before{content:'';position:absolute;top:6px;left:0;right:0;height:1px;
-  background:linear-gradient(90deg,transparent,#4a3a20 6%,#4a3a20 94%,transparent);}
-#xmasLights span{width:7px;height:11px;border-radius:50% 50% 50% 50% / 60% 60% 40% 40%;
-  position:relative;z-index:1;animation:xmasLight 1.6s ease-in-out infinite;margin-top:0;}
-#xmasLights span:nth-child(3n+1){background:#ff3b3b;box-shadow:0 0 6px #ff3b3b,0 0 12px rgba(255,59,59,.55);}
-#xmasLights span:nth-child(3n+2){background:#3bff5e;box-shadow:0 0 6px #3bff5e,0 0 12px rgba(59,255,94,.55);}
-#xmasLights span:nth-child(3n+3){background:#ffd83b;box-shadow:0 0 6px #ffd83b,0 0 12px rgba(255,216,59,.55);}
-@keyframes xmasLight{0%,100%{opacity:.35;transform:scale(.85);}50%{opacity:1;transform:scale(1.15);}}
-.xmas-corner{position:absolute;font-size:26px;z-index:2;pointer-events:none;
-  filter:drop-shadow(0 2px 8px rgba(0,0,0,.7)) drop-shadow(0 0 12px rgba(244,196,48,.35));
-  animation:xmasBob 3s ease-in-out infinite;line-height:1;opacity:.85;}
-.xmas-tl{top:14px;left:14px;}
-.xmas-tr{top:14px;right:14px;animation-delay:.5s;}
-.xmas-bl{bottom:14px;left:14px;animation-delay:1s;}
-.xmas-br{bottom:14px;right:14px;animation-delay:1.5s;}
-@keyframes xmasBob{0%,100%{transform:translateY(0) rotate(-6deg);}50%{transform:translateY(-6px) rotate(6deg);}}
+/* Christmas corner decorations on stage */
+.xmas-corner{position:absolute;font-size:22px;z-index:2;pointer-events:none;
+  opacity:.6;filter:drop-shadow(0 2px 6px rgba(0,0,0,.7));
+  animation:xmasBob 3s ease-in-out infinite;line-height:1;}
+.xmas-tl{top:10px;left:10px;}
+.xmas-tr{top:10px;right:10px;animation-delay:.5s;}
+.xmas-bl{bottom:10px;left:10px;animation-delay:1s;}
+.xmas-br{bottom:10px;right:10px;animation-delay:1.5s;}
+@keyframes xmasBob{0%,100%{transform:translateY(0) rotate(-6deg);}50%{transform:translateY(-5px) rotate(6deg);}}
 .fab{position:absolute;right:12px;bottom:12px;width:42px;height:42px;border-radius:0;
   background:#c41e3a;color:#fff;border:none;font-size:22px;font-weight:700;cursor:pointer;
   box-shadow:0 3px 0 #7a1020,0 0 15px rgba(196,30,58,.5);z-index:5;
@@ -115,7 +101,7 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0a1a0d;color:#f5f0e1;
 #fsExit{display:none;position:absolute;top:12px;right:12px;z-index:950;
   background:rgba(0,0,0,.75);border-color:#c41e3a;color:#ff8fa3;}
 #stageWrap:fullscreen #fsExit{display:block;}
-#camInfo{position:absolute;left:10px;top:24px;font-size:10px;color:#a8b8a0;
+#camInfo{position:absolute;left:10px;top:10px;font-size:10px;color:#a8b8a0;
   background:rgba(0,0,0,.6);padding:4px 8px;border-radius:0;display:none;}
 .panmode #camInfo{display:block;}
 .panmode #stage{cursor:grab;}
@@ -210,7 +196,7 @@ select.inp{appearance:none;
 html[data-theme=light],html[data-theme=light] body{background:#e9edf4;}
 html[data-theme=light] :is(#topbar,#toolbar,#inspector,.modal-box){filter:invert(1) hue-rotate(180deg);}
 html[data-theme=light] :is(#topbar,#toolbar,#inspector,.modal-box) :is(img,canvas){filter:invert(1) hue-rotate(180deg);}
-.modal{position:fixed;inset:0;background:rgba(5,15,8,.85);z-index:5000;display:none;
+.modal{position:fixed;inset:0;background:rgba(5,15,8,.85);z-index:1000;display:none;
   align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(4px);}
 .modal.show{display:flex;}
 .modal-box{background:#142a18;border:1px solid #2d4a32;border-radius:0;padding:18px;
@@ -281,7 +267,7 @@ html[data-theme=light] :is(#topbar,#toolbar,#inspector,.modal-box) :is(img,canva
   background:rgba(244,196,48,.07);border-radius:0;margin-top:6px;border-left:2px solid #f4c430;}
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(120%);
   background:#1e3a22;border:1px solid #3d6a44;color:#f5f0e1;padding:10px 18px;
-  border-radius:0;font-size:12.5px;font-weight:600;z-index:9000;
+  border-radius:0;font-size:12.5px;font-weight:600;z-index:2000;
   box-shadow:0 10px 30px rgba(0,0,0,.6),0 0 20px rgba(45,122,62,.3);
   transition:transform .25s,opacity .25s;opacity:0;pointer-events:none;max-width:90vw;text-align:center;}
 #toast.show{transform:translateX(-50%) translateY(0);opacity:1;}
@@ -304,15 +290,11 @@ html[data-theme=light] :is(#topbar,#toolbar,#inspector,.modal-box) :is(img,canva
 #rotate .ic{font-size:46px;}
 @media (orientation:portrait){#rotate{display:flex;}}
 
-/* ============ EASTER EGG LAYERS ============ */
-#snowLayer{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:1500;display:none;}
+/* ===== EASTER EGG: Snow + Wind ===== */
+#snowLayer{position:fixed;inset:0;pointer-events:none;z-index:1501;overflow:hidden;display:none;}
 #snowLayer.on{display:block;}
-#windLayer{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:1501;display:none;}
+#windLayer{position:fixed;inset:0;pointer-events:none;z-index:1500;overflow:hidden;display:none;}
 #windLayer.on{display:block;}
-#easterLayer{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:1503;display:none;}
-#easterLayer.on{display:block;}
-#burstLayer{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:1600;}
-
 .snowflake{position:absolute;top:0;left:0;color:#fff;will-change:transform;
   font-family:system-ui,sans-serif;text-shadow:0 0 8px rgba(180,230,255,.95),0 0 2px #fff;
   line-height:1;user-select:none;-webkit-user-select:none;}
@@ -320,78 +302,6 @@ html[data-theme=light] :is(#topbar,#toolbar,#inspector,.modal-box) :is(img,canva
   background:linear-gradient(90deg,transparent,rgba(200,240,255,.9),transparent);
   animation:windBlow linear infinite;filter:blur(.3px);}
 @keyframes windBlow{from{transform:translateX(-160px);}to{transform:translateX(100vw);}}
-
-/* ============ GIFT EASTER BOX ============ */
-#giftEaster{position:fixed;left:50%;top:50%;z-index:1550;
-  transform:translate(-50%,-120vh) scale(0.3) rotate(-40deg);
-  opacity:0;pointer-events:none;
-  transition:transform .7s cubic-bezier(0.34,1.56,0.64,1),opacity .5s;
-  display:flex;flex-direction:column;align-items:center;gap:6px;}
-#giftEaster.show{transform:translate(-50%,-50%) scale(1) rotate(0);opacity:1;pointer-events:auto;}
-#giftEaster .gift-inner{font-size:86px;line-height:1;cursor:pointer;
-  animation:giftBob 2s ease-in-out infinite,giftPulse 1.5s ease-in-out infinite;
-  transform-origin:center;}
-@keyframes giftBob{0%,100%{transform:rotate(-5deg) translateY(0);}50%{transform:rotate(5deg) translateY(-8px);}}
-@keyframes giftPulse{
-  0%,100%{filter:drop-shadow(0 10px 20px rgba(0,0,0,.5)) drop-shadow(0 0 20px rgba(244,196,48,.6));}
-  50%{filter:drop-shadow(0 10px 20px rgba(0,0,0,.5)) drop-shadow(0 0 40px rgba(244,196,48,1)) drop-shadow(0 0 60px rgba(196,30,58,.6));}
-}
-#giftEaster .gift-hint{font-size:11px;font-weight:800;color:#f4c430;letter-spacing:.5px;
-  text-shadow:0 0 8px rgba(0,0,0,.9);padding:4px 10px;background:rgba(0,0,0,.6);
-  animation:hintPulse 1.2s ease-in-out infinite;}
-@keyframes hintPulse{0%,100%{opacity:.65;}50%{opacity:1;}}
-#giftEaster .gift-wish{display:none;width:300px;max-width:88vw;
-  padding:22px 22px 18px;background:linear-gradient(135deg,#fbf2d8 0%,#ecd9a8 100%);
-  color:#4a2f1a;font-family:Georgia,'Times New Roman',serif;border-radius:6px;
-  box-shadow:0 25px 60px rgba(0,0,0,.75),0 0 40px rgba(244,196,48,.5);
-  position:relative;animation:wishAppear .5s cubic-bezier(0.34,1.56,0.64,1);
-  transform-origin:center;cursor:pointer;}
-#giftEaster .gift-wish::before{content:'';position:absolute;inset:6px;
-  border:1px dashed rgba(74,47,26,.3);border-radius:3px;pointer-events:none;}
-#giftEaster .gift-wish::after{content:'🎄';position:absolute;top:-16px;left:50%;
-  transform:translateX(-50%);font-size:24px;filter:drop-shadow(0 2px 4px rgba(0,0,0,.4));}
-#giftEaster .wish-title{color:#a81228;font-weight:bold;font-size:13px;margin-bottom:12px;
-  text-align:center;font-family:system-ui,sans-serif;letter-spacing:.5px;position:relative;}
-#giftEaster .wish-body{font-style:italic;text-align:center;line-height:1.65;font-size:14px;
-  position:relative;}
-@keyframes wishAppear{from{transform:scale(0.5) rotate(-5deg);opacity:0;}to{transform:scale(1) rotate(0);opacity:1;}}
-
-/* ============ CHILD WISH NOTES (easter egg) ============ */
-.wish-note{position:fixed;top:0;left:50%;width:200px;padding:14px 14px 10px;
-  background:linear-gradient(135deg,#fbf2d8 0%,#ecd9a8 100%);
-  color:#4a2f1a;font-family:Georgia,'Courier New',serif;
-  font-size:12px;line-height:1.45;border-radius:2px;
-  box-shadow:0 6px 16px rgba(0,0,0,.55),inset 0 0 30px rgba(139,90,42,.08);
-  pointer-events:none;will-change:transform;
-  animation-name:wishFall;animation-timing-function:linear;animation-fill-mode:forwards;
-  animation-duration:var(--dur,18s);transform:translate(-50%,-120%);}
-.wish-note::before{content:'';position:absolute;inset:5px;
-  border:1px dashed rgba(74,47,26,.25);border-radius:1px;pointer-events:none;}
-.wish-note .wish-text{font-style:italic;position:relative;text-align:center;}
-.wish-note .wish-author{margin-top:8px;text-align:right;font-size:10px;font-weight:bold;
-  color:#8a5a2a;font-family:system-ui,sans-serif;position:relative;}
-@keyframes wishFall{
-  0%{transform:translate(-50%,-120%) translateX(0) rotate(var(--r0,-5deg));opacity:0;}
-  8%{opacity:1;}
-  50%{transform:translate(-50%,50vh) translateX(var(--sx1,0)) rotate(var(--r1,5deg));}
-  92%{opacity:1;}
-  100%{transform:translate(-50%,105vh) translateX(var(--sx2,0)) rotate(var(--r0,-5deg));opacity:0;}
-}
-/* Santa sleigh */
-.santa-sleigh{position:fixed;left:-240px;display:flex;align-items:center;gap:2px;
-  font-size:26px;pointer-events:none;will-change:transform;
-  filter:drop-shadow(0 4px 10px rgba(0,0,0,.7));
-  animation-name:santaFly;animation-timing-function:linear;animation-fill-mode:forwards;
-  animation-duration:8s;}
-.santa-sleigh span{display:inline-block;animation:santaBob 0.6s ease-in-out infinite alternate;}
-.santa-sleigh span:nth-child(2){animation-delay:.1s;}
-.santa-sleigh span:nth-child(3){animation-delay:.2s;}
-.santa-sleigh span:nth-child(4){animation-delay:.3s;}
-@keyframes santaFly{0%{transform:translate(0,0);}100%{transform:translate(calc(100vw + 500px),-30px);}}
-@keyframes santaBob{from{transform:translateY(0);}to{transform:translateY(-4px);}}
-/* Particle element base */
-.p-emoji{position:absolute;pointer-events:none;will-change:transform,opacity;
-  user-select:none;-webkit-user-select:none;line-height:1;top:0;left:0;}
 </style>
 </head>
 <body>
@@ -400,6 +310,9 @@ html[data-theme=light] :is(#topbar,#toolbar,#inspector,.modal-box) :is(img,canva
     <div class="logo" id="logoBtn" title="Bấm 3 lần để bật/tắt tuyết 🎄">
       <span style="font-size:15px;font-weight:400;">🎄</span><b>MNHR</b><span>Engine</span><i class="ver">9.0.1</i>
     </div>
+    <div class="xmas-deco" aria-hidden="true">
+      <span>🗿</span>
+      </div>
     <div class="spacer"></div>
     <button id="btnProjects" class="btn">Dự án</button>
     <button id="btnUndo" class="btn" disabled>Undo</button>
@@ -423,7 +336,6 @@ html[data-theme=light] :is(#topbar,#toolbar,#inspector,.modal-box) :is(img,canva
     </nav>
 
     <section id="stageWrap">
-      <div id="xmasLights" aria-hidden="true"></div>
       <canvas id="stage"></canvas>
       <div class="xmas-corner xmas-tl" aria-hidden="true">🎄</div>
       <div class="xmas-corner xmas-tr" aria-hidden="true">⭐</div>
@@ -594,18 +506,6 @@ if (keys['z'] || keys['Z']) keys['Fire'] = true;"></textarea>
 <!-- Easter egg layers -->
 <div id="snowLayer" aria-hidden="true"></div>
 <div id="windLayer" aria-hidden="true"></div>
-<div id="easterLayer" aria-hidden="true"></div>
-<div id="burstLayer" aria-hidden="true"></div>
-
-<!-- Gift easter box -->
-<div id="giftEaster" aria-live="polite">
-  <div class="gift-inner">🎁</div>
-  <div class="gift-hint">Bấm để mở</div>
-  <div class="gift-wish">
-    <div class="wish-title">🎄 Lời chúc Giáng Sinh 🎄</div>
-    <div class="wish-body"></div>
-  </div>
-</div>
 
 <div id="rotate">
   <div class="ic">❄</div>
@@ -617,265 +517,61 @@ if (keys['z'] || keys['Z']) keys['Fire'] = true;"></textarea>
 <script>MNHR.Editor.init();</script>
 <script>
 /* ============================================================
-   🎄 CHRISTMAS DECORATION SYSTEM
-   - Particle engine dùng chung: burst / snowfall-from-button / gift
-   - Easter egg: 3 click logo → snow + wind + wish notes + santa
-   - Gift box easter egg: 10s đầu rồi 2-3 phút một lần
+   🎄 EASTER EGG: Click logo 3 lần → tuyết rơi + gió
+   Click 3 lần nữa → tắt
    ============================================================ */
 (function(){
   var logo    = document.getElementById('logoBtn');
   var snowL   = document.getElementById('snowLayer');
   var windL   = document.getElementById('windLayer');
-  var easterL = document.getElementById('easterLayer');
-  var burstL  = document.getElementById('burstLayer');
-  var giftBox = document.getElementById('giftEaster');
-  if(!logo || !snowL || !windL || !easterL || !burstL || !giftBox) return;
+  if(!logo || !snowL || !windL) return;
 
-  /* ---------- Helper: generate xmas light bulbs ---------- */
-  var lightsEl = document.getElementById('xmasLights');
-  if(lightsEl){
-    for(var L=0; L<26; L++){
-      var bulb = document.createElement('span');
-      bulb.style.animationDelay = (L*0.09) + 's';
-      lightsEl.appendChild(bulb);
-    }
-  }
+  var clicks  = 0;
+  var clickTm = null;
+  var active  = false;
+  var flakes  = [];
+  var rafId   = null;
+  var phase   = 0;
+  var lastT   = 0;
 
-  /* ---------- Toast ---------- */
   function toastMsg(msg, ok){
     var t = document.getElementById('toast');
     if(!t) return;
     t.textContent = msg;
     t.className = 'show' + (ok ? ' ok' : '');
     clearTimeout(t._tm);
-    t._tm = setTimeout(function(){ t.className = ''; }, 2400);
+    t._tm = setTimeout(function(){ t.className = ''; }, 2200);
   }
-
-  /* ============================================================
-     PARTICLE ENGINE — physics-based, dùng cho burst & topbar fx
-     ============================================================ */
-  var particles = [];
-  var particleRaf = null;
-  var particleLastT = 0;
-  var GRAVITY_DEFAULT = 1200;
-
-  function addParticle(el, opts){
-    el.classList.add('p-emoji');
-    el.style.left = opts.x + 'px';
-    el.style.top  = opts.y + 'px';
-    el.style.fontSize = (opts.size || 16) + 'px';
-    if(opts.shadow) el.style.filter = opts.shadow;
-    burstL.appendChild(el);
-    particles.push({
-      el: el,
-      x: 0, y: 0,
-      vx: opts.vx || 0,
-      vy: opts.vy || 0,
-      rot: opts.rot || 0,
-      vr: opts.vr || 0,
-      life: 0,
-      ttl: opts.ttl || 2,
-      gravity: (opts.gravity != null) ? opts.gravity : GRAVITY_DEFAULT,
-      drag: opts.drag != null ? opts.drag : 0.985
-    });
-    if(!particleRaf){
-      particleLastT = 0;
-      particleRaf = requestAnimationFrame(particleTick);
-    }
-  }
-
-  function particleTick(t){
-    if(!particleLastT) particleLastT = t;
-    var dt = Math.min(0.05, (t - particleLastT)/1000);
-    particleLastT = t;
-    var alive = 0;
-    for(var i=0; i<particles.length; i++){
-      var p = particles[i];
-      if(p.dead) continue;
-      p.life += dt;
-      if(p.life > p.ttl){
-        p.el.remove();
-        p.dead = true;
-        continue;
-      }
-      alive++;
-      // physics
-      p.vy += p.gravity * dt;
-      var dragStep = Math.pow(p.drag, dt * 60);
-      p.vx *= dragStep;
-      p.vy *= dragStep;
-      p.x += p.vx * dt;
-      p.y += p.vy * dt;
-      p.rot += p.vr * dt;
-      // alpha fade ở 30% cuối
-      var alpha = 1;
-      if(p.life > p.ttl * 0.7){
-        alpha = 1 - (p.life - p.ttl*0.7) / (p.ttl*0.3);
-      }
-      p.el.style.transform =
-        'translate(-50%,-50%) translate(' + p.x.toFixed(1) + 'px,' + p.y.toFixed(1) + 'px) rotate(' +
-        p.rot.toFixed(1) + 'deg)';
-      p.el.style.opacity = alpha.toFixed(3);
-    }
-    if(alive > 0){
-      particleRaf = requestAnimationFrame(particleTick);
-    } else {
-      particleRaf = null;
-      particleLastT = 0;
-      particles = [];
-    }
-  }
-
-  /* ============================================================
-     BURST 10 EMOJI — physics parabol (curved + real fall)
-     ============================================================ */
-  function burst(x, y){
-    var emojis = ['🎁','🎁','🎁','❄️','❄️','🎄','🔔','⭐','⛄','🧦'];
-    for(var i=0; i<10; i++){
-      var el = document.createElement('div');
-      el.textContent = emojis[(Math.random()*emojis.length)|0];
-      var ang = (i / 10) * Math.PI * 2 + (Math.random()-0.5)*0.6;
-      var speed = 220 + Math.random()*180;
-      addParticle(el, {
-        x: x, y: y,
-        vx: Math.cos(ang) * speed * 0.55,
-        vy: Math.sin(ang) * speed * 0.35 - 170 - Math.random()*160,
-        rot: 0,
-        vr: (Math.random()-0.5) * 540,
-        size: 14 + Math.random()*12,
-        ttl: 2.0 + Math.random()*0.9,
-        gravity: 1250,
-        drag: 0.972,
-        shadow: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))'
-      });
-    }
-  }
-
-  /* ============================================================
-     TOPBAR BUTTON: snow + 1 gift rơi từ nút
-     ============================================================ */
-  function topbarSnow(x, y){
-    for(var i=0; i<6; i++){
-      var el = document.createElement('div');
-      el.textContent = '❄';
-      el.style.color = '#fff';
-      el.style.textShadow = '0 0 6px rgba(180,230,255,0.9),0 0 2px #fff';
-      addParticle(el, {
-        x: x + (Math.random()-0.5)*26,
-        y: y,
-        vx: (Math.random()-0.5)*90,
-        vy: 40 + Math.random()*70,
-        vr: (Math.random()-0.5)*240,
-        size: 8 + Math.random()*8,
-        ttl: 1.9 + Math.random()*1.0,
-        gravity: 340,
-        drag: 0.992
-      });
-    }
-  }
-  function topbarGift(x, y){
-    var el = document.createElement('div');
-    el.textContent = '🎁';
-    addParticle(el, {
-      x: x, y: y,
-      vx: (Math.random()-0.5)*70,
-      vy: 70 + Math.random()*70,
-      rot: 0,
-      vr: (Math.random()-0.5)*360,
-      size: 24,
-      ttl: 2.6 + Math.random()*0.6,
-      gravity: 850,
-      drag: 0.995,
-      shadow: 'drop-shadow(0 4px 8px rgba(0,0,0,0.5)) drop-shadow(0 0 8px rgba(244,196,48,0.5))'
-    });
-  }
-
-  /* ============================================================
-     GLOBAL CLICK HANDLER
-     - topbar buttons → snow + gift (luôn, dù easter egg bật/tắt)
-     - các nút khác  → 10 emoji burst (chỉ khi easter egg tắt)
-     ============================================================ */
-  document.addEventListener('click', function(e){
-    if(e.button !== 0) return;
-    if(e.target.closest('#logoBtn')) return;
-    if(e.target.closest('#giftEaster')) return;
-
-    var topbarBtn = e.target.closest('#topbar .btn, #topbar button');
-    if(topbarBtn){
-      var r = topbarBtn.getBoundingClientRect();
-      topbarSnow(r.left + r.width/2, r.bottom);
-      topbarGift(r.left + r.width/2, r.bottom);
-      return;
-    }
-
-    if(isWinterOn) return;
-
-    var btn = e.target.closest(
-      'button,.btn,.tool,.fab,.tab,.btn-mini,.layer-card,.layer-add,' +
-      '.anim-slot,.proj-item,.del,.fdel,.hb-del,.ev-del,.pi-del'
-    );
-    if(!btn) return;
-    burst(e.clientX, e.clientY);
-  }, true);
-
-  /* ============================================================
-     EASTER EGG: toggle tuyết + gió + santa + wish notes
-     ============================================================ */
-  var logoClicks = 0, logoClickTm = null;
-  var isWinterOn = false;
-  var flakes = [];
-  var winterRaf = null;
-  var winterPhase = 0;
-  var winterLastT = 0;
-  var noteTimer = null, santaTimer = null;
 
   logo.addEventListener('click', function(){
-    // visual feedback
-    try {
-      logo.animate(
-        [{transform:'scale(1)'},{transform:'scale(0.9)'},{transform:'scale(1)'}],
-        {duration:200, easing:'ease-out'}
-      );
-    } catch(_) {}
-
-    logoClicks++;
-    clearTimeout(logoClickTm);
-    logoClickTm = setTimeout(function(){ logoClicks = 0; }, 1400);
-    if(logoClicks >= 3){
-      logoClicks = 0;
-      isWinterOn = !isWinterOn;
-      if(isWinterOn) startWinter();
-      else            stopWinter();
+    clicks++;
+    clearTimeout(clickTm);
+    clickTm = setTimeout(function(){ clicks = 0; }, 1400);
+    if(clicks >= 3){
+      clicks = 0;
+      active = !active;
+      if(active) startWinter();
+      else        stopWinter();
     }
   });
 
   function startWinter(){
     snowL.classList.add('on');
     windL.classList.add('on');
-    easterL.classList.add('on');
     spawnFlakes(70);
     spawnWind(14);
-    winterLastT = 0;
-    if(!winterRaf) winterRaf = requestAnimationFrame(winterTick);
-    scheduleNote();
-    scheduleSanta();
-    // celebratory bursts
-    burst(window.innerWidth/2, window.innerHeight/3);
-    setTimeout(function(){ burst(window.innerWidth/2, window.innerHeight/2); }, 220);
+    lastT = 0;
+    if(!rafId) rafId = requestAnimationFrame(tick);
     toastMsg('🎄❄️ Merry Christmas! Tuyết & gió đang thổi…', true);
   }
 
   function stopWinter(){
     snowL.classList.remove('on');
     windL.classList.remove('on');
-    easterL.classList.remove('on');
     snowL.innerHTML = '';
     windL.innerHTML = '';
-    easterL.innerHTML = '';
     flakes.length = 0;
-    if(winterRaf){ cancelAnimationFrame(winterRaf); winterRaf = null; }
-    if(noteTimer){ clearTimeout(noteTimer); noteTimer = null; }
-    if(santaTimer){ clearTimeout(santaTimer); santaTimer = null; }
+    if(rafId){ cancelAnimationFrame(rafId); rafId = null; }
     toastMsg('❄️ Đã tắt tuyết & gió', false);
   }
 
@@ -888,15 +584,20 @@ if (keys['z'] || keys['Z']) keys['Fire'] = true;"></textarea>
       var el = document.createElement('div');
       el.className = 'snowflake';
       el.textContent = glyphs[(Math.random()*glyphs.length)|0];
-      el.style.fontSize = (8 + Math.random()*18) + 'px';
+      var size = 8 + Math.random()*18;
+      el.style.fontSize = size + 'px';
       el.style.opacity = (0.55 + Math.random()*0.45).toFixed(2);
       snowL.appendChild(el);
+
       flakes.push({
-        el: el, x: Math.random()*W, y: -Math.random()*H,
-        vy: 25 + Math.random()*70,
+        el: el,
+        x: Math.random()*W,
+        y: -Math.random()*H,
+        vy: 25 + Math.random()*70,          // tốc độ rơi
         sway: Math.random()*Math.PI*2,
         swayAmp: 15 + Math.random()*40,
-        swaySpeed: 0.6 + Math.random()*1.6
+        swaySpeed: 0.6 + Math.random()*1.6,
+        size: size
       });
     }
   }
@@ -915,197 +616,33 @@ if (keys['z'] || keys['Z']) keys['Fire'] = true;"></textarea>
     }
   }
 
-  function winterTick(t){
-    if(!winterLastT) winterLastT = t;
-    var dt = Math.min(0.05, (t - winterLastT)/1000);
-    winterLastT = t;
-    winterPhase += dt;
-    var windPower = 90 + Math.sin(winterPhase*0.7)*50 + Math.random()*35;
+  function tick(t){
+    if(!lastT) lastT = t;
+    var dt = Math.min(0.05, (t - lastT) / 1000);
+    lastT = t;
+    phase += dt;
+
+    // Gió mạnh lên xuống theo chu kỳ + ngẫu nhiên nhẹ
+    var windPower = 90 + Math.sin(phase*0.7)*50 + Math.random()*35;
     var W = window.innerWidth, H = window.innerHeight;
+
     for(var i=0;i<flakes.length;i++){
       var f = flakes[i];
       f.sway += dt * f.swaySpeed;
       f.x += (windPower + Math.sin(f.sway) * f.swayAmp) * dt;
       f.y += f.vy * dt;
+
+      // wrap
       if(f.y > H + 30){ f.y = -30; f.x = Math.random()*W; }
       if(f.x > W + 40){ f.x = -40; }
       if(f.x < -60){ f.x = W + 20; }
+
       f.el.style.transform =
         'translate3d(' + f.x.toFixed(1) + 'px,' + f.y.toFixed(1) + 'px,0) rotate(' +
-        ((f.sway*70)%360).toFixed(0) + 'deg)';
+        ((f.sway*70) % 360).toFixed(0) + 'deg)';
     }
-    winterRaf = requestAnimationFrame(winterTick);
+    rafId = requestAnimationFrame(tick);
   }
-
-  /* ---- Wish notes (trẻ em) ---- */
-  var WISHES = [
-    {text:"Con mong ông già Noel cho con một chiếc xe đạp mới ạ!", author:"Minh, 6 tuổi"},
-    {text:"Mong cả nhà con luôn vui vẻ, khỏe mạnh 🌟", author:"Linh, 8 tuổi"},
-    {text:"Con ước có một chú cún con để chơi cùng 🐶", author:"An, 7 tuổi"},
-    {text:"Ước gì bố con đi làm xa được về nhà với con 🤗", author:"Hùng, 9 tuổi"},
-    {text:"Con chỉ cần mẹ con khỏe lại thôi ạ ❤️", author:"Mai, 8 tuổi"},
-    {text:"Con xin ông cho em con hết bệnh 🙏", author:"Tí, 5 tuổi"},
-    {text:"Mong có thật nhiều kẹo để chia cho các bạn 🍬", author:"Vy, 7 tuổi"},
-    {text:"Con ước được gặp ông già Noel một lần 🎅", author:"Nam, 6 tuổi"},
-    {text:"Con mơ có bộ lego thật to để xây lâu đài 🏰", author:"Bảo, 8 tuổi"},
-    {text:"Mong mùa đông này con có áo ấm mới 🧥", author:"Thảo, 7 tuổi"},
-    {text:"Con chúc ông và các chú tuần lộc khỏe mạnh 🦌", author:"Khánh, 6 tuổi"},
-    {text:"Con muốn có thật nhiều bạn để cùng chơi 🎠", author:"My, 7 tuổi"},
-    {text:"Con ước được ăn bánh kem thật to cùng cả nhà 🎂", author:"Bống, 6 tuổi"}
-  ];
-
-  function scheduleNote(){
-    if(!isWinterOn) return;
-    var delay = 7000 + Math.random()*7000;
-    noteTimer = setTimeout(function(){
-      if(!isWinterOn) return;
-      spawnNote();
-      scheduleNote();
-    }, delay);
-  }
-
-  function spawnNote(){
-    var w = WISHES[(Math.random()*WISHES.length)|0];
-    var el = document.createElement('div');
-    el.className = 'wish-note';
-    el.innerHTML = '<div class="wish-text">' + w.text + '</div>' +
-                   '<div class="wish-author">— ' + w.author + '</div>';
-    el.style.left = (12 + Math.random()*70) + '%';
-    var dur = 16 + Math.random()*8;
-    el.style.setProperty('--dur', dur + 's');
-    el.style.setProperty('--sx1', ((Math.random()-0.5)*120).toFixed(1) + 'px');
-    el.style.setProperty('--sx2', ((Math.random()-0.5)*120).toFixed(1) + 'px');
-    el.style.setProperty('--r0', ((Math.random()-0.5)*20).toFixed(1) + 'deg');
-    el.style.setProperty('--r1', ((Math.random()-0.5)*20).toFixed(1) + 'deg');
-    easterL.appendChild(el);
-    el.addEventListener('animationend', function(){ el.remove(); });
-  }
-
-  /* ---- Santa ---- */
-  function scheduleSanta(){
-    if(!isWinterOn) return;
-    var delay = 22000 + Math.random()*20000;
-    santaTimer = setTimeout(function(){
-      if(!isWinterOn) return;
-      spawnSanta();
-      scheduleSanta();
-    }, delay);
-  }
-  function spawnSanta(){
-    var el = document.createElement('div');
-    el.className = 'santa-sleigh';
-    el.innerHTML = '<span>🦌</span><span>🦌</span><span>🛷</span><span>🎅</span>';
-    el.style.top = (8 + Math.random()*20) + 'vh';
-    var dur = 7 + Math.random()*4;
-    el.style.animationDuration = dur + 's';
-    easterL.appendChild(el);
-    var numGifts = 2 + Math.floor(Math.random()*3);
-    for(var i=0;i<numGifts;i++){
-      (function(idx){
-        var dropAt = (0.2 + idx*0.22 + Math.random()*0.1) * dur * 1000;
-        setTimeout(function(){
-          if(!isWinterOn) return;
-          var r = el.getBoundingClientRect();
-          dropGiftFromSanta(r.left + r.width/2, r.top + r.height);
-        }, dropAt);
-      })(i);
-    }
-    setTimeout(function(){ el.remove(); }, dur*1000 + 500);
-  }
-  function dropGiftFromSanta(x, y){
-    var el = document.createElement('div');
-    el.textContent = ['🎁','🎁','🧸','🎀'][(Math.random()*4)|0];
-    el.style.filter = 'drop-shadow(0 4px 8px rgba(0,0,0,.6))';
-    el.style.fontSize = '24px';
-    easterL.appendChild(el);
-    el.style.position = 'fixed';
-    el.style.left = x + 'px';
-    el.style.top  = y + 'px';
-    el.style.pointerEvents = 'none';
-    el.style.transition = 'transform 2.6s cubic-bezier(.3,.7,.6,1), opacity 2.6s ease-in';
-    el.style.willChange = 'transform, opacity';
-    requestAnimationFrame(function(){
-      el.style.transform = 'translate(' + ((Math.random()-0.5)*100) + 'px, 100vh) rotate(' + ((Math.random()-0.5)*720) + 'deg)';
-      el.style.opacity = '0';
-    });
-    setTimeout(function(){ el.remove(); }, 3000);
-  }
-
-  /* ============================================================
-     GIFT BOX EASTER — timer 10s đầu, rồi 2-3 phút một lần
-     ============================================================ */
-  var CHRISTMAS_WISHES = [
-    "Chúc bạn một Giáng Sinh an lành, ấm áp bên gia đình và những người thân yêu!",
-    "Cầu mong mọi điều tốt đẹp nhất sẽ đến với bạn trong mùa Noel này.",
-    "Chúc bạn có một mùa Giáng Sinh tràn ngập niềm vui, tiếng cười và tình yêu thương.",
-    "Mong rằng phép màu Giáng Sinh sẽ đến với bạn và những người bạn yêu quý.",
-    "Chúc bạn năm mới an khang thịnh vượng, vạn sự như ý, vạn điều may mắn!",
-    "Giáng Sinh an lành — Hạnh phúc ngập tràn — Yêu thương chan hoà — Bình an mãi mãi.",
-    "Ước gì mọi ước mơ của bạn đều thành hiện thực trong mùa Giáng Sinh kỳ diệu này.",
-    "Chúc bạn và gia đình có một đêm Giáng Sinh ấm áp, ngọt ngào như vị bánh kem.",
-    "Mong ánh sáng của ngôi sao Giáng Sinh sẽ soi đường dẫn lối cho bạn đến với hạnh phúc.",
-    "Chúc bạn mùa Noel này ngập tràn quà tặng, niềm vui và những bất ngờ thú vị!"
-  ];
-
-  var giftHideTm = null;
-  var giftOpened = false;
-  var giftWishBody = giftBox.querySelector('.wish-body');
-  var giftInner    = giftBox.querySelector('.gift-inner');
-  var giftWishEl   = giftBox.querySelector('.gift-wish');
-  var giftHintEl   = giftBox.querySelector('.gift-hint');
-
-  function showGiftBox(){
-    giftOpened = false;
-    giftInner.style.display = 'block';
-    giftWishEl.style.display = 'none';
-    giftHintEl.style.display = 'block';
-    if(giftWishBody) giftWishBody.textContent = '';
-    giftBox.classList.add('show');
-    clearTimeout(giftHideTm);
-    giftHideTm = setTimeout(hideGiftBox, 7000);
-  }
-  function hideGiftBox(){
-    giftBox.classList.remove('show');
-    clearTimeout(giftHideTm);
-    giftHideTm = null;
-  }
-  function openGiftBox(){
-    if(giftOpened) return;
-    giftOpened = true;
-    clearTimeout(giftHideTm);
-
-    var w = CHRISTMAS_WISHES[(Math.random()*CHRISTMAS_WISHES.length)|0];
-    if(giftWishBody) giftWishBody.textContent = w;
-    giftInner.style.display = 'none';
-    giftHintEl.style.display = 'none';
-    giftWishEl.style.display = 'block';
-
-    // burst nhỏ tại tâm gift
-    var rect = giftBox.getBoundingClientRect();
-    burst(rect.left + rect.width/2, rect.top + rect.height/2);
-
-    giftHideTm = setTimeout(hideGiftBox, 8000);
-  }
-
-  giftBox.addEventListener('click', function(e){
-    e.stopPropagation();
-    if(!giftOpened) openGiftBox();
-    else hideGiftBox();
-  });
-
-  // Timer: 10s đầu → chắc chắn hiện, sau đó 2-3 phút
-  setTimeout(function(){
-    showGiftBox();
-    function loopGift(){
-      var delay = 120000 + Math.random()*60000;
-      setTimeout(function(){
-        showGiftBox();
-        loopGift();
-      }, delay);
-    }
-    loopGift();
-  }, 10000);
-
 })();
 </script>
 </body>
