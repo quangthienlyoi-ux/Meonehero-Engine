@@ -1,5 +1,5 @@
 /* ============================================================
-   MNHR-engine — engine.js Alpha 9.0.1
+   MNHR-engine — engine.js Alpha 9.5.0
    Auto-detect đa frame + Hệ thống Biến (Events)
    ============================================================ */
 window.MNHR = (function () {
@@ -157,14 +157,16 @@ function MiniRuntime() {
     }
     return best === null ? 0 : best;
   }
-  /* Hộp của khối sau khi áp dụng animation kỹ thuật (dịch / co giãn / xoay quanh tâm) */
+  /* Hộp của khối sau animation kỹ thuật: dịch / phóng to / xoay quanh ĐIỂM NEO (T.px, T.py) */
   function blockBoxes(it, T) {
-    const cx = it.x + T.dx, cy = it.y + T.dy, c = Math.cos(T.rot), sn = Math.sin(T.rot);
+    const px = it.x + (T.px || 0), py = it.y + (T.py || 0);
+    const sx = T.hs === false ? 1 : T.sx, sy = T.hs === false ? 1 : T.sy, rot = T.hr === false ? 0 : T.rot;
+    const c = Math.cos(rot), sn = Math.sin(rot);
     const L = hbList(it);
     const rects = (L && L.length) ? L : [{ ox: 0, oy: 0, w: it.w, h: it.h }];
     return rects.map(h => {
-      const lx = h.ox * T.sx, ly = h.oy * T.sy;
-      return makeRotBox(cx + lx * c - ly * sn, cy + lx * sn + ly * c, h.w * T.sx, h.h * T.sy, T.rot);
+      const lx = (it.x + h.ox - px) * sx, ly = (it.y + h.oy - py) * sy;
+      return makeRotBox(px + T.dx + lx * c - ly * sn, py + T.dy + lx * sn + ly * c, h.w * sx, h.h * sy, rot);
     });
   }
   function aabb(a, b) {
@@ -240,7 +242,7 @@ function MiniRuntime() {
               if (m) {
                 const dd = Math.min(m.depth, 32);
                 it.x += m.nx * dd; it.y += m.ny * dd;
-                if (m.ny < -0.3) { it._onGround = true; if (it._vy > 0) it._vy = 0; }
+                if (m.ny < -0.3) { it._onGround = true; it._dpGround = true; if (it._vy > 0) it._vy = 0; }
                 else if (m.ny > 0.3 && it._vy < 0) it._vy = 0;
                 if (m.nx * it._vx < 0) it._vx = 0;
               }
@@ -486,7 +488,7 @@ function MiniRuntime() {
   /* ============================================================
      ANIMATION KỸ THUẬT (chỉ dành cho khối)
      ============================================================ */
-  const TA_DEFAULT = { x: 0, y: 0, rot: 0, sx: 1, sy: 1, alpha: 1 };
+  const TA_DEFAULT = { x: 0, y: 0, rot: 0, sx: 1, sy: 1, sc: 1, alpha: 1 };
   function bezier(x1, y1, x2, y2, t) {
     if (t <= 0) return 0; if (t >= 1) return 1;
     const cx = 3 * x1, bx = 3 * (x2 - x1) - cx, ax = 1 - cx - bx;
@@ -519,8 +521,43 @@ function MiniRuntime() {
       default: return u;                                          // đều
     }
   }
+  function ruleDur(r, it) {   // độ dài của hành động (để "kết thúc" có nghĩa)
+    const p = r.params || {};
+    if (r.action === 'shake') return Math.max(0, +p.dur || 0.5);
+    if (r.action === 'sound') return Math.max(0, +p.duration || 0.2);
+    if (r.action === 'customAnim' && it && it.animations) {
+      const an = it.animations['custom:' + (p.name || '')];
+      return an && an.frames && an.frames.length ? an.frames.length / Math.max(1, an.fps || 8) : 0;
+    }
+    return 0;
+  }
+  /* Thời điểm chạy của từng hành động: bám vào bước hoặc vào hành động khác (r.after = {kind:'rule', ref}) */
+  function techRuleTimes(ta, S, it) {
+    const byId = {}, T = {}, vis = {};
+    let cyc = false;
+    (ta.rules || []).forEach(r => { byId[r.id] = r; });
+    const timeOf = (r) => {
+      if (T[r.id] !== undefined) return T[r.id];
+      if (vis[r.id]) { cyc = true; return 0; }
+      vis[r.id] = true;
+      let t = null;
+      const a = r.after;
+      if (a && a.kind === 'rule' && byId[a.ref] && a.ref !== r.id) {
+        const q = byId[a.ref], tq = timeOf(q);
+        if (tq != null) t = tq + (r.when === 'end' ? ruleDur(q, it) : 0);
+      } else {
+        const st = (ta.steps || []).find(x => x.id === r.step);
+        if (st && S[st.id] != null) t = S[st.id] + (r.when === 'end' ? Math.max(0, st.dur || 0) : 0);
+      }
+      vis[r.id] = false;
+      T[r.id] = t == null ? null : t + Math.max(0, r.delay || 0);
+      return T[r.id];
+    };
+    (ta.rules || []).forEach(timeOf);
+    return { T, cyc };
+  }
   /* Thời điểm bắt đầu tuyệt đối của từng bước (tính từ lúc kích hoạt chuỗi) */
-  function techSchedule(ta) {
+  function techSchedule(ta, it) {
     const steps = ta.steps || [], S = {}, byId = {}, vis = {};
     steps.forEach(st => { byId[st.id] = st; });
     let cyc = false;
@@ -541,11 +578,9 @@ function MiniRuntime() {
     steps.forEach(start);
     let total = 0;
     steps.forEach(st => { total = Math.max(total, S[st.id] + Math.max(0, st.dur || 0)); });
-    (ta.rules || []).forEach(r => {
-      const st = byId[r.step]; if (!st) return;
-      total = Math.max(total, S[st.id] + (r.when === 'end' ? Math.max(0, st.dur || 0) : 0) + Math.max(0, r.delay || 0));
-    });
-    return { S, total, cyc };
+    const rt = techRuleTimes(ta, S, it);
+    (ta.rules || []).forEach(r => { const t = rt.T[r.id]; if (t != null) total = Math.max(total, t + ruleDur(r, it)); });
+    return { S, total, cyc: cyc || rt.cyc, R: rt.T };
   }
   function propAt(list, n, t, base) {
     let v = base;
@@ -570,11 +605,14 @@ function MiniRuntime() {
       if (!rel && key === 'y') base = it.y;
       out[key] = list.length ? propAt(list, list.length, t, base) : base;
     }
+    const og = ta.origin || { x: 0, y: 0 };
     return {
       dx: rel ? out.x : out.x - it.x, dy: rel ? out.y : out.y - it.y,
       rot: out.rot * Math.PI / 180,
-      sx: Math.max(0.01, out.sx), sy: Math.max(0.01, out.sy),
-      alpha: Math.max(0, Math.min(1, out.alpha))
+      sx: Math.max(0.01, out.sx * out.sc), sy: Math.max(0.01, out.sy * out.sc),
+      alpha: Math.max(0, Math.min(1, out.alpha)),
+      px: (+og.x || 0) / 100 * it.w / 2, py: (+og.y || 0) / 100 * it.h / 2,   // điểm neo (lệch so với tâm khối)
+      hs: ta.hitScale !== false, hr: ta.hitRot !== false
     };
   }
   function applyFlag(cur, v) { return v === 'on' ? true : v === 'off' ? false : !cur; }
@@ -602,10 +640,8 @@ function MiniRuntime() {
   }
   function techRules(state, b, ta, sched, a, z) {   // chạy các hành động có thời điểm trong (a, z]
     for (const r of (ta.rules || [])) {
-      const st = (ta.steps || []).find(x => x.id === r.step);
-      if (!st) continue;
-      const tau = sched.S[st.id] + (r.when === 'end' ? Math.max(0, st.dur || 0) : 0) + Math.max(0, r.delay || 0);
-      if (tau > a && tau <= z) runTechAction(state, b, r);
+      const tau = sched.R ? sched.R[r.id] : null;
+      if (tau != null && tau > a && tau <= z) runTechAction(state, b, r);
     }
   }
   function techState(b) {
@@ -617,7 +653,7 @@ function MiniRuntime() {
     const R = techState(b);
     if (R.running && ta.retrigger !== 'restart') return;
     if (ta.once && R.used) return;
-    R.used = true; R.running = true; R.e = 0; R.prevT = -1e-9; R.cycle = 0; R.sched = techSchedule(ta);
+    R.used = true; R.running = true; R.e = 0; R.prevT = -1e-9; R.cycle = 0; R.sched = techSchedule(ta, b);
   }
   function updateTechAnims(state, dt) {
     for (const b of state.items) {
@@ -665,10 +701,10 @@ function MiniRuntime() {
       if (finished) { techRules(state, b, ta, sched, R.prevT, T); R.running = false; }
       // chở nhân vật đứng trên khối đặc (tắt được bằng ta.carry), kể cả khi khối đang xoay
       if (b.solid && ta.carry !== false) {
-        const dRot = xf.rot - (oldXf ? oldXf.rot : 0);
+        const dRot = xf.hr === false ? 0 : xf.rot - (oldXf ? oldXf.rot : 0);
         const ddx = xf.dx - (oldXf ? oldXf.dx : 0), ddy = xf.dy - (oldXf ? oldXf.dy : 0);
         if (ddx || ddy || dRot) {
-          const ocx = b.x + (oldXf ? oldXf.dx : 0), ocy = b.y + (oldXf ? oldXf.dy : 0), ncx = b.x + xf.dx, ncy = b.y + xf.dy;
+          const ocx = b.x + (xf.px || 0) + (oldXf ? oldXf.dx : 0), ocy = b.y + (xf.py || 0) + (oldXf ? oldXf.dy : 0), ncx = b.x + (xf.px || 0) + xf.dx, ncy = b.y + (xf.py || 0) + xf.dy;
           const cd = Math.cos(dRot), sd = Math.sin(dRot);
           for (const s of state.items) {
             if (s.kind !== 'sprite' || s._dead || !s._onGround) continue;
@@ -684,17 +720,96 @@ function MiniRuntime() {
     }
   }
 
-  /* ---------- NHẠC NỀN ---------- */
-  function createBGM(tracks) {
+  /* ============================================================
+     BƯỚC THỜI GIAN CỐ ĐỊNH (60Hz) + nội suy hình ảnh
+     ============================================================ */
+  const FIXED_DT = 1 / 60, MAX_STEPS = 5;
+  let LOWFX = false;
+  function runFixed(state, rawDt, stepFn) {
+    rawDt = Math.max(0, rawDt || 0);
+    if (state.opts && state.opts.fixedStep === false) { stepFn(Math.min(0.05, rawDt)); state._alpha = 1; return 1; }   // chế độ tương thích (cách cũ)
+    state._ft = state._ft ? state._ft * 0.9 + Math.min(0.25, rawDt) * 0.1 : Math.min(0.25, rawDt);   // thời gian khung trung bình
+    if (rawDt > 0.9 * FIXED_DT && rawDt < 1.1 * FIXED_DT) rawDt = FIXED_DT;   // màn hình ~60Hz: bỏ nhiễu nhỏ
+    state._acc = (state._acc || 0) + Math.min(0.25, rawDt);
+    let n = 0;
+    while (state._acc >= FIXED_DT - 1e-9 && n < MAX_STEPS) { stepFn(FIXED_DT); state._acc -= FIXED_DT; n++; }
+    if (state._acc >= FIXED_DT) state._acc = 0;   // quá tải: bỏ phần dư để game chậm lại thay vì xoắn
+    if (state._acc < 0) state._acc = 0;
+    // ~60Hz: vẽ đúng trạng thái hiện tại (không trễ). Tốc độ khác: nội suy giữa 2 bước để mượt
+    state._alpha = Math.abs(state._ft - FIXED_DT) < 0.12 * FIXED_DT ? 1 : Math.min(1, state._acc / FIXED_DT);
+    return n;
+  }
+  function snapshotPrev(state) {
+    for (const it of state.items) { it._px = it.x; it._py = it.y; it._pxf = it._xf; }
+    for (const p of state.projectiles) { p._px = p.x; p._py = p.y; }
+    if (state.camera) { state._pcx = state.camera.x; state._pcy = state.camera.y; }
+  }
+  function lerpXf(a, b, t) {
+    return { dx: a.dx + (b.dx - a.dx) * t, dy: a.dy + (b.dy - a.dy) * t, rot: a.rot + (b.rot - a.rot) * t,
+      sx: a.sx + (b.sx - a.sx) * t, sy: a.sy + (b.sy - a.sy) * t, alpha: a.alpha + (b.alpha - a.alpha) * t, px: b.px, py: b.py, hs: b.hs, hr: b.hr };
+  }
+  /* Vẽ ở thời điểm giữa 2 bước logic → mượt trên màn hình 90/120/144Hz */
+  function renderInterp(ctx, state, opts, alpha) {
+    if (!(alpha >= 0 && alpha < 1) || (state.opts && state.opts.fixedStep === false)) { render(ctx, state, opts); return; }
+    const sv = [], ps = [], cam = state.camera;
+    for (const it of state.items) {
+      if (it._px === undefined) continue;
+      if (Math.abs(it.x - it._px) > 120 || Math.abs(it.y - it._py) > 120) continue;   // dịch chuyển tức thời: không nội suy
+      sv.push([it, it.x, it.y, it._xf]);
+      it.x = it._px + (it.x - it._px) * alpha; it.y = it._py + (it.y - it._py) * alpha;
+      if (it.kind === 'block' && it._xf && it._pxf) it._xf = lerpXf(it._pxf, it._xf, alpha);
+    }
+    for (const p of state.projectiles) {
+      if (p._px === undefined) continue;
+      ps.push([p, p.x, p.y]); p.x = p._px + (p.x - p._px) * alpha; p.y = p._py + (p.y - p._py) * alpha;
+    }
+    let cx = 0, cy = 0, camOk = false;
+    if (cam && state._pcx !== undefined && Math.abs(cam.x - state._pcx) < 200 && Math.abs(cam.y - state._pcy) < 200) {
+      cx = cam.x; cy = cam.y; camOk = true;
+      cam.x = state._pcx + (cx - state._pcx) * alpha; cam.y = state._pcy + (cy - state._pcy) * alpha;
+    }
+    try { render(ctx, state, opts); }
+    finally {
+      for (const e of sv) { e[0].x = e[1]; e[0].y = e[2]; e[0]._xf = e[3]; }
+      for (const e of ps) { e[0].x = e[1]; e[0].y = e[2]; }
+      if (camOk) { cam.x = cx; cam.y = cy; }
+    }
+  }
+  function drawFps(ctx, state, raw) {
+    if (raw > 0) state._fps = state._fps ? state._fps * 0.9 + (1 / raw) * 0.1 : 1 / raw;
+    ctx.save(); ctx.font = 'bold 11px monospace'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(4, 4, 62, 16);
+    ctx.fillStyle = '#7fbf63'; ctx.fillText(Math.round(state._fps || 0) + ' FPS', 8, 12);
+    ctx.restore();
+  }
+
+  /* ---------- NHẠC NỀN: giờ theo đồng hồ thật + Web Audio (lặp liền mạch), dự phòng thẻ audio ---------- */
+  function createBGM(tracks, clockFn) {
     const rs = [];
-    (tracks || []).forEach(t => { if (t && t.url) rs.push({ t, a: null, st: 'idle', wait: 0, time: 0, plays: 0, fo: 0, foMax: 0, blocked: false }); });
+    (tracks || []).forEach(t => { if (t && t.url) rs.push({ t, a: null, web: null, buf: undefined, mode: null, st: 'idle', wait: 0, time: 0, plays: 0, fo: 0, foMax: 0, blocked: false, endAt: 0 }); });
+    const clk = clockFn || (() => (typeof performance !== 'undefined' && performance.now) ? performance.now() / 1000 : Date.now() / 1000);
+    let last = clk();
     const base = r => Math.max(0, Math.min(1, r.t.volume != null ? r.t.volume : 0.8));
+    const AC = (typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext)) || null;
+    let ac = null;
+    function loadBuf(r) {
+      if (r.buf !== undefined) return;
+      if (!AC || typeof fetch !== 'function' || r.t.url.length > 12e6) { r.buf = false; return; }
+      try {
+        if (!ac) ac = new AC();
+        r.buf = null;
+        fetch(r.t.url).then(x => x.arrayBuffer())
+          .then(ab => new Promise((res, rej) => { const q = ac.decodeAudioData(ab, res, rej); if (q && q.then) q.then(res, rej); }))
+          .then(b => { r.buf = b; }).catch(() => { r.buf = false; });
+      } catch (e) { r.buf = false; }
+    }
+    rs.forEach(loadBuf);
     const audioOf = (r) => {
       if (!r.a) {
         if (typeof Audio === 'undefined') return null;
         const a = new Audio(); a.preload = 'auto'; a.src = r.t.url;
         a.addEventListener('ended', () => {
-          if (r.st !== 'playing') return;
+          if (r.st !== 'playing' || r.mode !== 'html') return;
           r.plays++;
           if (r.t.loop !== 'infinite' && r.plays >= Math.max(1, r.t.loopCount || 1)) { r.st = 'done'; return; }
           try { a.currentTime = 0; const p = a.play(); if (p && p.catch) p.catch(() => {}); } catch (e) {}
@@ -703,20 +818,43 @@ function MiniRuntime() {
       }
       return r.a;
     };
+    const webStart = (r) => {
+      const c = ac, s = c.createBufferSource(), g = c.createGain(), v = base(r), t0 = c.currentTime;
+      s.buffer = r.buf; s.loop = true; s.connect(g); g.connect(c.destination);
+      g.gain.setValueAtTime(r.t.fadeIn > 0 ? 0 : v, t0);
+      if (r.t.fadeIn > 0) g.gain.linearRampToValueAtTime(v, t0 + r.t.fadeIn);
+      r.web = { s, g, len: 0 }; r.mode = 'web'; r.st = 'playing'; r.endAt = 0;
+      if (r.t.loop !== 'infinite') {
+        const len = r.buf.duration * Math.max(1, r.t.loopCount || 1);
+        r.web.len = len; s.stop(t0 + len); r.endAt = clk() + len;
+      }
+      s.start(t0);
+      if (c.state !== 'running') { r.blocked = true; try { c.resume().then(() => { r.blocked = false; if (r.web && r.web.len) r.endAt = clk() + r.web.len; }).catch(() => {}); } catch (e) {} }
+    };
     const begin = (r) => {
+      r.time = 0; r.plays = 0; r.blocked = false; r.fo = 0;
+      if (ac && r.buf) { webStart(r); return; }
       const a = audioOf(r);
       if (!a) { r.st = 'done'; return; }
-      r.st = 'playing'; r.time = 0; r.plays = 0; r.blocked = false;
+      r.mode = 'html'; r.st = 'playing';
       a.loop = r.t.loop === 'infinite';
       try { a.currentTime = 0; } catch (e) {}
       a.volume = r.t.fadeIn > 0 ? 0 : base(r);
       const p = a.play(); if (p && p.catch) p.catch(() => { r.blocked = true; });
     };
-    const end = (r) => { r.st = 'done'; if (r.a) { try { r.a.pause(); } catch (e) {} } };
+    const end = (r) => {
+      r.st = 'done';
+      if (r.web) { try { r.web.s.stop(); } catch (e) {} try { r.web.s.disconnect(); r.web.g.disconnect(); } catch (e) {} r.web = null; }
+      if (r.a) { try { r.a.pause(); } catch (e) {} }
+      r.mode = null;
+    };
     const halt = (r) => {
       if (r.st === 'wait') { r.st = 'done'; return; }
       if (r.st !== 'playing') return;
-      if (r.t.fadeOut > 0) { r.fo = r.foMax = r.t.fadeOut; r.st = 'fading'; } else end(r);
+      if (r.t.fadeOut > 0) {
+        r.fo = r.foMax = r.t.fadeOut; r.st = 'fading';
+        if (r.web) { const g = r.web.g.gain, tt = ac.currentTime; try { g.cancelScheduledValues(tt); g.setValueAtTime(g.value, tt); g.linearRampToValueAtTime(0, tt + r.t.fadeOut); } catch (e) {} }
+      } else end(r);
     };
     return {
       trigger(name) {
@@ -725,21 +863,26 @@ function MiniRuntime() {
           r.wait = Math.max(0, r.t.delay || 0); r.st = 'wait'; if (r.wait <= 0) begin(r);
         }
       },
-      update(dt) {
+      update() {
+        const tNow = clk(), d = Math.max(0, tNow - last); last = tNow;   // đồng hồ thật, không phụ thuộc số khung hình
         for (const r of rs) {
-          if (r.st === 'wait') { r.wait -= dt; if (r.wait <= 0) begin(r); }
+          if (r.st === 'wait') { r.wait -= d; if (r.wait <= 0) begin(r); }
           else if (r.st === 'playing' || r.st === 'fading') {
-            r.time += dt;
+            r.time += d;
+            if (r.mode === 'web' && r.st === 'playing' && r.endAt && !r.blocked && tNow >= r.endAt) { end(r); continue; }
             if (r.st === 'playing' && r.t.stopMode === 'afterSec' && r.time >= Math.max(0.1, r.t.stopAfter || 30)) halt(r);
             let v = base(r);
             if (r.t.fadeIn > 0 && r.time < r.t.fadeIn) v *= r.time / r.t.fadeIn;
-            if (r.st === 'fading') { r.fo -= dt; if (r.fo <= 0) { end(r); continue; } v *= r.fo / r.foMax; }
-            if (r.a) r.a.volume = Math.max(0, Math.min(1, v));
+            if (r.st === 'fading') { r.fo -= d; if (r.fo <= 0) { end(r); continue; } v *= r.fo / r.foMax; }
+            if (r.mode === 'html' && r.a) r.a.volume = Math.max(0, Math.min(1, v));
           }
         }
       },
-      unlock() { for (const r of rs) if (r.blocked && r.a && (r.st === 'playing' || r.st === 'fading')) { const p = r.a.play(); if (p && p.then) p.then(() => { r.blocked = false; }).catch(() => {}); } },
-      stopAll() { for (const r of rs) { r.st = 'idle'; if (r.a) { try { r.a.pause(); } catch (e) {} } } }
+      unlock() {
+        if (ac && ac.state === 'suspended') { try { ac.resume(); } catch (e) {} }
+        for (const r of rs) if (r.blocked && r.mode === 'html' && r.a && (r.st === 'playing' || r.st === 'fading')) { const p = r.a.play(); if (p && p.then) p.then(() => { r.blocked = false; }).catch(() => {}); }
+      },
+      stopAll() { for (const r of rs) { end(r); r.st = 'idle'; } }
     };
   }
   function updateBGM(state, dt) {
@@ -748,7 +891,7 @@ function MiniRuntime() {
     for (const it of state.items) if (it.kind === 'sprite' && it.control === 'player' && it._dead) { dead = true; break; }
     if (dead && !state._bgmDead) c.trigger('death');
     state._bgmDead = dead;
-    c.update(dt);
+    c.update();
   }
 
   function executeAction(state, it, action, params) {
@@ -802,8 +945,10 @@ function MiniRuntime() {
         });
         break;
       case 'spawnParticles': {
-        const count = Math.max(1, params.count != null ? params.count : 12);
+        let count = Math.max(1, params.count != null ? params.count : 12);
+        if (state.opts && state.opts.lowFx) count = Math.min(count, 6);   // giảm hiệu ứng
         for (let i = 0; i < count; i++) {
+          if (state.opts && state.opts.lowFx && state.particles.length > 120) break;
           state.particles.push({
             x: it.x, y: it.y,
             vx: (Math.random() - 0.5) * 200,
@@ -1269,6 +1414,7 @@ function MiniRuntime() {
     if (!isFinite(it._vx)) it._vx = 0;
     if (!isFinite(it._vy)) it._vy = 0;
     it._vy = clamp(it._vy, -30, 25);
+    it._dpGround = false;
     depenetrate(state, it);   // hướng nhìn vừa đổi / frame khối đổi → thoát khỏi khối trước khi di chuyển
     // chia nhỏ bước di chuyển để không xuyên khối mỏng
     const steps = clamp(Math.ceil(Math.max(Math.abs(it._vx), Math.abs(it._vy)) * dt * 60 / 6), 1, 12);
@@ -1281,7 +1427,7 @@ function MiniRuntime() {
       resolveCollisions(state, it, 'y');
       if (it._onGround) grounded = true;
     }
-    it._onGround = grounded;
+    it._onGround = grounded || !!it._dpGround;   // được khối xoay/di chuyển nâng lên cũng tính là đang đứng
     depenetrate(state, it);
     pushSprites(state, it);
     if (it._onGround === false && grounded) it._onGround = true;
@@ -1455,7 +1601,8 @@ function MiniRuntime() {
     if (!T) { drawBlockBase(ctx, it, editor); return; }
     ctx.save();
     ctx.globalAlpha *= Math.max(0, Math.min(1, T.alpha));
-    ctx.translate(it.x + T.dx, it.y + T.dy); ctx.rotate(T.rot); ctx.scale(T.sx, T.sy); ctx.translate(-it.x, -it.y);
+    const pvx = it.x + (T.px || 0), pvy = it.y + (T.py || 0);
+    ctx.translate(pvx + T.dx, pvy + T.dy); ctx.rotate(T.rot); ctx.scale(T.sx, T.sy); ctx.translate(-pvx, -pvy);
     drawBlockBase(ctx, it, editor);
     ctx.restore();
   }
@@ -1525,7 +1672,7 @@ function MiniRuntime() {
       safeDraw(ctx, img, -p.w / 2, -p.h / 2, p.w, p.h);
     } else {
       ctx.fillStyle = '#ffb86b';
-      ctx.shadowColor = '#ffb86b'; ctx.shadowBlur = 8;
+      ctx.shadowColor = '#ffb86b'; ctx.shadowBlur = LOWFX ? 0 : 8;
       ctx.beginPath(); ctx.arc(p.x, p.y, p.w / 2, 0, Math.PI * 2); ctx.fill();
     }
     ctx.restore();
@@ -1667,6 +1814,7 @@ function MiniRuntime() {
   }
 
   function render(ctx, state, opts) {
+    LOWFX = !!(state.opts && state.opts.lowFx);
     opts = opts || {};
     const editor = !!opts.editor;
     const cam = (editor && state.editCam) ? state.editCam : (state.camera || { x: VW/2, y: VH/2 });
@@ -1762,7 +1910,7 @@ function MiniRuntime() {
     updateProjectiles, updateCamera,
     updateParticles, updateFloatingTexts, updateShake,
     render, drawUI, hitUIButton, spawnBullet, tryShoot,
-    fireEvent, executeAction, frameOf, initVars, bodyBoxes, respawnItem, AI_DEF, clampAI, createBGM, updateBGM, updateTechAnims, evalTech, techSchedule, startTech, blockBoxes, satMTV, makeRotBox, axisPush, easeFn
+    fireEvent, executeAction, frameOf, initVars, bodyBoxes, respawnItem, AI_DEF, clampAI, createBGM, updateBGM, runFixed, snapshotPrev, renderInterp, drawFps, FIXED_DT, updateTechAnims, evalTech, techSchedule, startTech, blockBoxes, satMTV, makeRotBox, axisPush, easeFn
   };
 }
 
@@ -1941,7 +2089,7 @@ const State = {
   showMenu: false, fullscreen: false, dirty: false,
   varDefs: [], vars: {},
   res: { scale: 1, pixel: false },
-  opts: { turnAnim: true }, music: { tracks: [] }, bgmCtl: null
+  opts: { turnAnim: true, fixedStep: true, lowFx: false, showFps: false }, music: { tracks: [] }, bgmCtl: null
 };
 
 function toast(msg, kind, ms) {
@@ -3554,7 +3702,7 @@ function renderBlockInspector(root, item) {
 
   root.appendChild(sectionHeader('Animation Kỹ Thuật'));
   const tsum = item.techAnim && item.techAnim.steps && item.techAnim.steps.length
-    ? (item.techAnim.steps.length + ' bước · ' + RT.techSchedule(item.techAnim).total.toFixed(2) + 's · ' + (item.techAnim.enabled ? 'đang bật' : 'đang tắt'))
+    ? (item.techAnim.steps.length + ' bước · ' + RT.techSchedule(item.techAnim, item).total.toFixed(2) + 's · ' + (item.techAnim.enabled ? 'đang bật' : 'đang tắt'))
     : 'Chưa có animation kỹ thuật.';
   root.appendChild(el('div', 'ev-hint', tsum));
   const tbtn = el('button', 'btn accent full', 'Mở Animation Kỹ Thuật');
@@ -3946,43 +4094,50 @@ function loop(t) {
 }
 function loopBody(t) {
   if (!lastT) lastT = t;
-  let dt = (t - lastT) / 1000;
+  let raw = (t - lastT) / 1000;
   lastT = t;
-  if (dt > 0.05) dt = 0.05;
-  if (dt < 0) dt = 0;
-  if (State.playing) RT.updateBGM(State, dt);
+  if (raw < 0) raw = 0;
+  if (State.playing) RT.updateBGM(State, raw);   // nhạc theo đồng hồ thật
 
-  if (State.playing && !State.showMenu) {
-    State.time += dt;
-    RT.updateTechAnims(State, dt);
-    for (const it of State.items) {
-      if (it.kind === 'sprite') RT.updateItem(State, it, dt, State.keys);
-      else if (it.kind === 'block') RT.updateBlock(it, dt);
-    }
-    RT.updateProjectiles(State, dt);
-    RT.updateParticles(State, dt);
-    RT.updateFloatingTexts(State, dt);
-    RT.updateShake(State, dt);
-    RT.updateCamera(State, dt);
-  } else if (State.playing && State.showMenu) {
-    for (const it of State.items) {
-      if (it.kind === 'sprite') RT.updateItem(State, it, dt, {});
-      else if (it.kind === 'block') RT.updateBlock(it, dt);
-    }
-    RT.updateParticles(State, dt);
-    RT.updateFloatingTexts(State, dt);
-    RT.updateShake(State, dt);
+  if (State.playing) {
+    const menu = State.showMenu;
+    RT.runFixed(State, raw, (dt) => {
+      RT.snapshotPrev(State);
+      if (!menu) {
+        State.time += dt;
+        RT.updateTechAnims(State, dt);
+        for (const it of State.items) {
+          if (it.kind === 'sprite') RT.updateItem(State, it, dt, State.keys);
+          else if (it.kind === 'block') RT.updateBlock(it, dt);
+        }
+        RT.updateProjectiles(State, dt);
+        RT.updateParticles(State, dt);
+        RT.updateFloatingTexts(State, dt);
+        RT.updateShake(State, dt);
+        RT.updateCamera(State, dt);
+      } else {
+        for (const it of State.items) {
+          if (it.kind === 'sprite') RT.updateItem(State, it, dt, {});
+          else if (it.kind === 'block') RT.updateBlock(it, dt);
+        }
+        RT.updateParticles(State, dt);
+        RT.updateFloatingTexts(State, dt);
+        RT.updateShake(State, dt);
+      }
+    });
+    RT.renderInterp(ctx, State, { editor: false }, State._alpha);
+    if (State.opts && State.opts.showFps) RT.drawFps(ctx, State, raw);
   } else {
+    const dt = Math.min(0.05, raw);
     for (const it of State.items) {
       if (it.kind === 'block' && it.animations && it.animations.default &&
           it.animations.default.frames.length > 1) {
         RT.updateBlock(it, dt);
       }
     }
+    RT.render(ctx, State, { editor: true });
+    if (State.tab === 'ui') drawUIEditorOverlay();
   }
-
-  RT.render(ctx, State, { editor: !State.playing });
-  if (!State.playing && State.tab === 'ui') drawUIEditorOverlay();
 }
 
 function drawUIEditorOverlay() {
@@ -4099,7 +4254,7 @@ function serialize() {
 
     vw: VW, vh: VH,
     res: { scale: State.res.scale, pixel: !!State.res.pixel },
-    opts: { turnAnim: !!State.opts.turnAnim },
+    opts: { turnAnim: !!State.opts.turnAnim, fixedStep: State.opts.fixedStep !== false, lowFx: !!State.opts.lowFx, showFps: !!State.opts.showFps },
     music: { tracks: State.music.tracks.map(t => Object.assign({}, t)) },
     ui: JSON.parse(JSON.stringify(State.ui)),
     items: State.items.map(it => {
@@ -4158,7 +4313,7 @@ function serialize() {
 
 function deserialize(data) {
   State.res = { scale: Math.max(1, Math.min(4, Math.round(+(data && data.res && data.res.scale) || 1))), pixel: !!(data && data.res && data.res.pixel) };
-  State.opts = { turnAnim: !(data && data.opts) || data.opts.turnAnim !== false };
+  State.opts = { turnAnim: !(data && data.opts) || data.opts.turnAnim !== false, fixedStep: !(data && data.opts) || data.opts.fixedStep !== false, lowFx: !!(data && data.opts && data.opts.lowFx), showFps: !!(data && data.opts && data.opts.showFps) };
   State.music = { tracks: ((data && data.music && data.music.tracks) || []).map(makeTrack) };
   State.varDefs = ((data && data.varDefs) || []).map(d => ({ name: String(d.name || ''), value: d.value != null ? String(d.value) : '0' }));
   State.items = [];
@@ -4451,7 +4606,7 @@ async function renderSettings() {
   const lines = [
     ['Dự án', meta ? meta.name : '-'], ['Nhân vật / Bot', st.sprites], ['Khối', st.blocks],
     ['Frame ảnh', st.frames + ' (~' + fmtSize(st.bytes) + ')'], ['Hitbox', st.hb], ['Sự kiện', st.events],
-    ['Dung lượng dự án', meta ? fmtSize(meta.size || 0) : '-'], ['Nơi lưu', Store.name()], ['Phiên bản', 'Alpha 9.0.1']
+    ['Dung lượng dự án', meta ? fmtSize(meta.size || 0) : '-'], ['Nơi lưu', Store.name()], ['Phiên bản', 'Alpha 9.5.0']
   ];
   try {
     if (navigator.storage && navigator.storage.estimate) {
@@ -4473,7 +4628,7 @@ async function renderSettings() {
 }
 function mnhrText() {
   const meta = Projects.meta(State.currentProjectId);
-  return JSON.stringify({ mnhr: 1, engine: 'Alpha 9.0.1', name: meta ? meta.name : 'Dự án', savedAt: Date.now(), data: serialize() });
+  return JSON.stringify({ mnhr: 1, engine: 'Alpha 9.5.0', name: meta ? meta.name : 'Dự án', savedAt: Date.now(), data: serialize() });
 }
 function downloadMnhr() {
   try {
@@ -4591,7 +4746,7 @@ function openBgmModal() {
    ANIMATION KỸ THUẬT (khối): dữ liệu + menu + preview
    ============================================================ */
 const TA_EASE = [['linear', 'Đều'], ['out', 'Chậm dần'], ['in', 'Nhanh dần'], ['inout', 'Chậm - nhanh - chậm'], ['back', 'Vọt rồi về'], ['bounce', 'Nảy'], ['elastic', 'Đàn hồi'], ['bezier', 'Tự chỉnh (2 điểm điều khiển)']];
-const TA_PROPS = [['x', 'Vị trí X', 1], ['y', 'Vị trí Y', 1], ['rot', 'Xoay (độ)', 1], ['sx', 'Rộng (nhân)', 0.05], ['sy', 'Cao (nhân)', 0.05], ['alpha', 'Độ mờ (0-1)', 0.05]];
+const TA_PROPS = [['x', 'Vị trí X', 1], ['y', 'Vị trí Y', 1], ['rot', 'Xoay (độ)', 1], ['sc', 'Phóng to (đều)', 0.05], ['sx', 'Rộng (nhân)', 0.05], ['sy', 'Cao (nhân)', 0.05], ['alpha', 'Độ mờ (0-1)', 0.05]];
 const TA_ACTIONS = [['shake', 'Rung màn hình'], ['customAnim', 'Phát animation tuỳ chỉnh của khối'], ['signal', 'Gửi tín hiệu (cho nhân vật / khối)'], ['solid', 'Bật/tắt va chạm (rắn)'],
   ['hazard', 'Bật/tắt gây sát thương'], ['visible', 'Hiện/ẩn khối'], ['var', 'Đổi biến game'], ['sound', 'Phát âm thanh (bíp)'], ['startBlock', 'Chạy animation của khối khác'], ['stopAnim', 'Dừng chuỗi này']];
 const taUI = { item: null, t: 0, playing: false, last: 0, sel: null, zoom: 1, px: 0, py: 0, mode: 'normal', cur: null, view: null, bezIn: [] };
@@ -4616,7 +4771,7 @@ const TA_CSS = '#taModal .modal-box{width:min(780px,98vw);max-width:98vw;max-hei
   '#taBody{grid-column:2;grid-row:2;overflow:auto;max-height:none;}#taModal .modal-actions{display:none;}}';
 function newTechAnim() {
   return { enabled: true, trigger: { type: 'start', delay: 0, name: '', button: '', cond: { var: '', op: '>=', value: '1' } }, repeat: 'none', count: 0,
-    carry: true, once: false, retrigger: 'ignore', space: 'rel', steps: [], rules: [] };
+    carry: true, once: false, retrigger: 'ignore', space: 'rel', origin: { x: 0, y: 0 }, hitScale: true, hitRot: true, steps: [], rules: [] };
 }
 function newTechStep(ta, it) {
   const last = ta.steps[ta.steps.length - 1];
@@ -4630,6 +4785,8 @@ function sanitizeTech(t) {
   const out = newTechAnim(), tg = t.trigger || {};
   out.enabled = t.enabled !== false;
   out.carry = t.carry !== false;
+  out.hitScale = t.hitScale !== false; out.hitRot = t.hitRot !== false;
+  out.origin = { x: Math.max(-500, Math.min(500, num(t.origin && t.origin.x, 0))), y: Math.max(-500, Math.min(500, num(t.origin && t.origin.y, 0))) };
   out.trigger = { type: ['start', 'touch', 'signal', 'button', 'var'].indexOf(tg.type) >= 0 ? tg.type : 'start', delay: Math.max(0, num(tg.delay, 0)), name: String(tg.name || ''), button: String(tg.button || ''),
     cond: { var: String((tg.cond && tg.cond.var) || ''), op: String((tg.cond && tg.cond.op) || '>='), value: String(tg.cond && tg.cond.value != null ? tg.cond.value : '1') } };
   out.repeat = ['none', 'loop', 'pingpong'].indexOf(t.repeat) >= 0 ? t.repeat : 'none';
@@ -4639,7 +4796,7 @@ function sanitizeTech(t) {
   out.steps = (Array.isArray(t.steps) ? t.steps : []).map((st, i) => {
     let id = String((st && st.id) || ('s' + i)); while (ids[id]) id += '_'; ids[id] = 1;
     const props = {};
-    ['x', 'y', 'rot', 'sx', 'sy', 'alpha'].forEach(k => {
+    ['x', 'y', 'rot', 'sx', 'sy', 'sc', 'alpha'].forEach(k => {
       const p = st && st.props && st.props[k];
       if (p && p.on) props[k] = { on: true, from: (p.from === null || p.from === undefined || p.from === '') ? null : num(p.from, 0), to: num(p.to, 0) };
     });
@@ -4650,16 +4807,16 @@ function sanitizeTech(t) {
       bez: (st && Array.isArray(st.bez) && st.bez.length === 4) ? st.bez.map(v => num(v, 0)) : [0.25, 0.1, 0.25, 1] };
   });
   out.rules = (Array.isArray(t.rules) ? t.rules : []).map((r, i) => ({ id: String((r && r.id) || ('r' + i)), step: String((r && r.step) || ''),
-    when: (r && r.when === 'start') ? 'start' : 'end', delay: Math.max(0, num(r && r.delay, 0)), action: String((r && r.action) || 'shake'), params: Object.assign({}, (r && r.params) || {}) }));
+    after: (r && r.after && r.after.kind === 'rule' && r.after.ref) ? { kind: 'rule', ref: String(r.after.ref) } : null, when: (r && r.when === 'start') ? 'start' : 'end', delay: Math.max(0, num(r && r.delay, 0)), action: String((r && r.action) || 'shake'), params: Object.assign({}, (r && r.params) || {}) }));
   return out;
 }
-function taTotal() { return Math.max(0.01, RT.techSchedule(taUI.item.techAnim).total); }
+function taTotal() { return Math.max(0.01, RT.techSchedule(taUI.item.techAnim, taUI.item).total); }
 function taStep(id) { return taUI.item.techAnim.steps.find(x => x.id === id) || null; }
 
 function taDraw() {
   const cv = document.getElementById('taPrev'); if (!cv || !taUI.item) return;
   const it = taUI.item, ta = it.techAnim, g = cv.getContext('2d');
-  const sched = RT.techSchedule(ta), T = Math.max(0.01, sched.total);
+  const sched = RT.techSchedule(ta, taUI.item), T = Math.max(0.01, sched.total);
   let x0 = it.x - it.w / 2, y0 = it.y - it.h / 2, x1 = it.x + it.w / 2, y1 = it.y + it.h / 2;
   const path = [];
   for (let i = 0; i <= 60; i++) {
@@ -4698,7 +4855,7 @@ function taDraw() {
     });
   });
   const xf = RT.evalTech(it, ta, taUI.t, sched);
-  g.save(); g.globalAlpha = xf.alpha; g.translate(it.x + xf.dx, it.y + xf.dy); g.rotate(xf.rot); g.scale(xf.sx, xf.sy);
+  g.save(); g.globalAlpha = xf.alpha; g.translate(it.x + xf.px + xf.dx, it.y + xf.py + xf.dy); g.rotate(xf.rot); g.scale(xf.sx, xf.sy); g.translate(-xf.px, -xf.py);
   const fr = it.animations && it.animations.default && it.animations.default.frames[0];
   const img = (fr && fr.img) || (it.tex && it.tex.all && it.tex.all.img);
   if (img && img.complete !== false) g.drawImage(img, -it.w / 2, -it.h / 2, it.w, it.h);
@@ -4709,8 +4866,11 @@ function taDraw() {
     const p = b.poly || [[b.x, b.y], [b.x + b.w, b.y], [b.x + b.w, b.y + b.h], [b.x, b.y + b.h]];
     g.beginPath(); p.forEach((q, i) => i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1])); g.closePath(); g.stroke();
   }
+  { const qx = it.x + xf.px + xf.dx, qy = it.y + xf.py + xf.dy, rr = 8 / sc;
+    g.strokeStyle = '#ff5a5a'; g.lineWidth = 2 / sc; g.beginPath();
+    g.arc(qx, qy, rr * 0.7, 0, 7); g.moveTo(qx - rr * 1.5, qy); g.lineTo(qx + rr * 1.5, qy); g.moveTo(qx, qy - rr * 1.5); g.lineTo(qx, qy + rr * 1.5); g.stroke(); }
   g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = '#fff'; g.font = '13px sans-serif';
-  g.fillText('t = ' + taUI.t.toFixed(2) + 's / ' + T.toFixed(2) + 's   (khung xanh = hitbox)', 8, 16);
+  g.fillText('t = ' + taUI.t.toFixed(2) + 's / ' + T.toFixed(2) + 's   (xanh = hitbox · đỏ = điểm neo, kéo được)', 8, 16);
   const fl = [];
   ta.rules.forEach(r => { const tau = taRuleTime(ta, sched, r); if (tau != null && taUI.t >= tau && taUI.t - tau < 0.45) { const a = TA_ACTIONS.find(x => x[0] === r.action); fl.push(a ? a[1] : r.action); } });
   g.fillStyle = '#7fbf63'; g.font = '13px sans-serif'; g.textAlign = 'center';
@@ -4720,16 +4880,13 @@ function taDraw() {
   if (taUI.cur) g.fillText('x ' + Math.round(taUI.cur[0]) + ' · y ' + Math.round(taUI.cur[1]), 8, H - 8);
   taTimeline();
 }
-function taRuleTime(ta, sc, r) {
-  const st = ta.steps.find(x => x.id === r.step);
-  return st ? sc.S[st.id] + (r.when === 'end' ? Math.max(0, st.dur || 0) : 0) + Math.max(0, r.delay || 0) : null;
-}
+function taRuleTime(ta, sc, r) { return sc.R && sc.R[r.id] != null ? sc.R[r.id] : null; }
 function taTimeline() {
   const cv = document.getElementById('taTL'); if (!cv || !taUI.item) return;
   const dpr = Math.min(2, window.devicePixelRatio || 1), r = cv.getBoundingClientRect();
   const w = Math.max(160, Math.round((r.width || 300) * dpr)), h = Math.round(36 * dpr);
   if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
-  const ta = taUI.item.techAnim, sc = RT.techSchedule(ta), T = Math.max(0.01, sc.total), g = cv.getContext('2d');
+  const ta = taUI.item.techAnim, sc = RT.techSchedule(ta, taUI.item), T = Math.max(0.01, sc.total), g = cv.getContext('2d');
   g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = '#0f1115'; g.fillRect(0, 0, w, h);
   const pad = 6 * dpr, X = (t) => pad + t / T * (w - 2 * pad);
   ta.steps.forEach((st, i) => {
@@ -4742,6 +4899,36 @@ function taTimeline() {
     g.beginPath(); g.moveTo(x, y - 6 * dpr); g.lineTo(x - 4 * dpr, y + 4 * dpr); g.lineTo(x + 4 * dpr, y + 4 * dpr); g.fill();
   });
   g.strokeStyle = '#fff'; g.lineWidth = dpr; g.beginPath(); g.moveTo(X(taUI.t), 0); g.lineTo(X(taUI.t), h); g.stroke();
+}
+function taPivotScreen() {
+  const it = taUI.item, ta = it.techAnim, v = taUI.view; if (!v) return null;
+  const xf = RT.evalTech(it, ta, taUI.t, RT.techSchedule(ta, it));
+  return { x: v.ox + (it.x + xf.px + xf.dx) * v.sc, y: v.oy + (it.y + xf.py + xf.dy) * v.sc, xf };
+}
+function taPivotHit(p) { const q = taPivotScreen(); return !!q && Math.hypot(q.x - p[0], q.y - p[1]) < 22; }
+function taPivotSet(p) {
+  const it = taUI.item, ta = it.techAnim, v = taUI.view, q = taPivotScreen(); if (!v || !q) return;
+  const wx = (p[0] - v.ox) / v.sc - q.xf.dx, wy = (p[1] - v.oy) / v.sc - q.xf.dy;   // điểm neo gốc (bỏ phần dịch chuyển hiện tại)
+  const rnd = (n) => Math.round(Math.max(-500, Math.min(500, n)) * 10) / 10;
+  ta.origin = { x: rnd((wx - it.x) / (it.w / 2) * 100), y: rnd((wy - it.y) / (it.h / 2) * 100) };
+  taOriginSync(); taDraw();
+}
+function taOriginSync() {
+  const ta = taUI.item.techAnim, c = taUI.originCtl || {};
+  ['x', 'y'].forEach(ax => { const k = c[ax]; if (!k) return; k.rg.value = String(Math.max(-100, Math.min(100, ta.origin[ax]))); k.nb.value = ta.origin[ax]; });
+}
+function taOriginRow(label, ax) {
+  const ta = taUI.item.techAnim;
+  const r = el('div', 'row'); r.appendChild(el('span', null, label));
+  const w = el('div'); w.style.cssText = 'display:flex;gap:6px;align-items:center;flex:1;min-width:180px;';
+  const rg = document.createElement('input'); rg.type = 'range'; rg.min = '-100'; rg.max = '100'; rg.step = '1'; rg.style.flex = '1';
+  const nb = document.createElement('input'); nb.type = 'number'; nb.className = 'inp'; nb.step = '5'; nb.style.width = '84px';
+  rg.value = String(Math.max(-100, Math.min(100, ta.origin[ax]))); nb.value = ta.origin[ax];
+  const set = (v) => { v = Math.max(-500, Math.min(500, isFinite(v) ? v : 0)); ta.origin[ax] = v; rg.value = String(Math.max(-100, Math.min(100, v))); if (nb.value !== String(v)) nb.value = v; taDraw(); scheduleSave(); };
+  rg.oninput = () => set(+rg.value); nb.oninput = () => set(parseFloat(nb.value));
+  w.appendChild(rg); w.appendChild(nb); r.appendChild(w);
+  (taUI.originCtl = taUI.originCtl || {})[ax] = { rg, nb };
+  return r;
 }
 function taApplySize() {
   const cv = document.getElementById('taPrev'); if (!cv) return;
@@ -4770,15 +4957,17 @@ function taZoomAt(sx, sy, f) {   // zoom quanh điểm (sx, sy) trên khung, gi�
   taDraw();
 }
 function taBindPreview(cv) {
-  const ptrs = new Map(); let lastTap = 0, moved = 0, pd = 0, lastMid = null;
+  const ptrs = new Map(); let lastTap = 0, moved = 0, pd = 0, lastMid = null, pivDrag = null;
   const pos = (e) => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * cv.width / (r.width || 1), (e.clientY - r.top) * cv.height / (r.height || 1)]; };
   cv.addEventListener('pointerdown', (e) => {
     try { cv.setPointerCapture(e.pointerId); } catch (_) {}
+    if (taUI.mode !== 'min' && ptrs.size === 0 && taPivotHit(pos(e))) { pivDrag = e.pointerId; return; }   // kéo điểm neo
     ptrs.set(e.pointerId, pos(e)); moved = 0;
     if (ptrs.size === 2) { const a = Array.from(ptrs.values()); pd = Math.hypot(a[0][0] - a[1][0], a[0][1] - a[1][1]); lastMid = [(a[0][0] + a[1][0]) / 2, (a[0][1] + a[1][1]) / 2]; }
   });
   cv.addEventListener('pointermove', (e) => {
     const p = pos(e), prev = ptrs.get(e.pointerId), v = taUI.view;
+    if (pivDrag === e.pointerId) { taPivotSet(p); return; }
     if (v) taUI.cur = [(p[0] - v.ox) / v.sc, (p[1] - v.oy) / v.sc];
     if (!prev) { taDraw(); return; }
     ptrs.set(e.pointerId, p);
@@ -4796,6 +4985,7 @@ function taBindPreview(cv) {
     }
   });
   const end = (e) => {
+    if (pivDrag === e.pointerId) { pivDrag = null; scheduleSave(); return; }
     const had = ptrs.delete(e.pointerId);
     if (ptrs.size < 2) { pd = 0; lastMid = null; }
     if (had && ptrs.size === 0 && moved < 8 && e.type === 'pointerup') {   // chạm 2 lần = phóng to / thu nhỏ khung xem trước
@@ -4862,6 +5052,7 @@ function taBindCurve(cv, st) {
   cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
 }
 function taDefaultTo(key, ta, it) {
+  if (key === 'sc') return 1.5;
   if (key === 'x') return ta.space === 'abs' ? it.x + 100 : 100;
   if (key === 'y') return ta.space === 'abs' ? it.y - 100 : -100;
   if (key === 'rot') return 90;
@@ -4978,19 +5169,57 @@ function taRuleParams(r, ta, it, box) {
 function taRefreshList() { if (taUI.item) taRender(); }
 function taRefreshAll() { taDraw(); const inf = document.getElementById('taInfo'); if (inf) taInfo(inf); const sk = document.getElementById('taSeek'); if (sk) sk.max = '1000'; }
 function taInfo(box) {
-  const ta = taUI.item.techAnim, sc = RT.techSchedule(ta), warn = [];
-  if (sc.cyc) warn.push('Có bước nối vòng tròn (A chờ B, B chờ A) — hãy đổi lại.');
+  const ta = taUI.item.techAnim, sc = RT.techSchedule(ta, taUI.item), warn = [];
+  if (sc.cyc) warn.push('Có bước/hành động nối vòng tròn (A chờ B, B chờ A) — hãy đổi lại.');
   ta.steps.forEach(st => {
     if (st.after.ref !== 'start' && !ta.steps.some(x => x.id === st.after.ref)) warn.push('"' + st.name + '" nối vào bước không tồn tại.');
     if (!Object.keys(st.props).length) warn.push('"' + st.name + '" chưa chọn thuộc tính nào để đổi.');
   });
-  ta.rules.forEach((r, i) => { if (!ta.steps.some(x => x.id === r.step)) warn.push('Hành động #' + (i + 1) + ' trỏ tới bước không tồn tại.'); });
+  ta.rules.forEach((r, i) => {
+    const okSrc = (r.after && r.after.kind === 'rule') ? ta.rules.some(x => x.id === r.after.ref) : ta.steps.some(x => x.id === r.step);
+    if (!okSrc) warn.push('Hành động #' + (i + 1) + ' trỏ tới bước/hành động không tồn tại.');
+  });
   box.textContent = 'Tổng thời gian chuỗi: ' + sc.total.toFixed(2) + 's' + (warn.length ? ' · CẢNH BÁO: ' + warn.join(' ') : '');
   box.style.color = warn.length ? '#e08a4c' : '';
+}
+function taRefWarnings(it, ta) {
+  const w = [];
+  if (ta.trigger.type === 'button' && !(State.ui.buttons || []).some(b => b.id === ta.trigger.button)) w.push('nút UI của chuỗi không tồn tại ở dự án này');
+  ta.rules.forEach(r => {
+    const p = r.params || {};
+    if (r.action === 'customAnim' && p.mode !== 'stop' && !(it.animations && it.animations['custom:' + p.name])) w.push('khối này chưa có animation tuỳ chỉnh "' + p.name + '"');
+    if (r.action === 'startBlock' && !State.items.some(x => x.id === p.target && x.kind === 'block')) w.push('hành động "chạy khối khác" trỏ tới khối không tồn tại');
+    if (r.action === 'var' && !(State.varDefs || []).some(d => d.name === p.name)) w.push('biến "' + p.name + '" chưa tồn tại');
+  });
+  return Array.from(new Set(w));
+}
+function taExportJson() {
+  const it = taUI.item, txt = JSON.stringify({ mnhr: 'techAnim', version: 1, techAnim: it.techAnim });
+  const box = document.getElementById('taJsonBox');
+  if (box) { box.value = txt; try { box.focus(); box.select(); } catch (_) {} }
+  const ok = () => toast('Đã sao chép chuỗi (' + it.techAnim.steps.length + ' bước, ' + it.techAnim.rules.length + ' hành động). Mở khối khác rồi bấm "Dán chuỗi".', 'ok', 4500);
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(ok).catch(() => toast('Trình duyệt chặn bộ nhớ tạm — hãy copy JSON trong ô bên dưới', 'ok', 5000));
+  else toast('Hãy copy JSON trong ô bên dưới', 'ok', 5000);
+}
+async function taImportJson() {
+  const it = taUI.item, box = document.getElementById('taJsonBox');
+  let txt = (box && box.value && box.value.trim()) ? box.value : '';
+  if (!txt) { try { txt = await navigator.clipboard.readText(); } catch (_) {} }
+  if (!txt || !txt.trim()) { toast('Chưa có JSON — copy ở khối khác hoặc dán vào ô bên dưới rồi bấm lại', 'err', 4500); return; }
+  let obj; try { obj = JSON.parse(txt); } catch (e) { toast('Không phải JSON hợp lệ', 'err'); return; }
+  const raw = (obj && obj.mnhr === 'techAnim') ? obj.techAnim : ((obj && Array.isArray(obj.steps)) ? obj : null);
+  const nt = sanitizeTech(raw);
+  if (!nt) { toast('JSON không phải chuỗi Animation Kỹ Thuật', 'err'); return; }
+  const warn = taRefWarnings(it, nt);
+  if (it.techAnim.steps.length && !confirm('Thay thế chuỗi hiện tại (' + it.techAnim.steps.length + ' bước) bằng chuỗi vừa dán (' + nt.steps.length + ' bước)?' + (warn.length ? '\nLưu ý:\n- ' + warn.join('\n- ') : ''))) return;
+  it.techAnim = nt; taUI.sel = nt.steps[0] ? nt.steps[0].id : null; taUI.t = 0; taRender(); scheduleSave();
+  toast('Đã dán chuỗi: ' + nt.steps.length + ' bước, ' + nt.rules.length + ' hành động' + (warn.length ? ' · ' + warn.length + ' cảnh báo' : ''), 'ok', 4500);
 }
 function taRender() {
   const it = taUI.item, ta = it.techAnim, body = document.getElementById('taBody');
   if (!body) return;
+  if (!ta.origin) ta.origin = { x: 0, y: 0 };
+  taUI.originCtl = {};
   body.innerHTML = '';
   const add = (n) => body.appendChild(n);
   add(sectionHeader('Kích hoạt chuỗi'));
@@ -5027,8 +5256,13 @@ function taRender() {
   })));
   add(row('Chở nhân vật đứng trên khối', checkbox(ta.carry !== false, v => ta.carry = v)));
   add(el('div', 'ev-hint', 'Tích: nhân vật đứng trên khối sẽ di chuyển (và xoay) theo khối. Bỏ tích: khối trượt đi, nhân vật đứng yên.'));
+  add(sectionHeader('Điểm neo & hitbox'));
+  add(taOriginRow('Origin X (%)', 'x')); add(taOriginRow('Origin Y (%)', 'y'));
+  add(el('div', 'ev-hint', 'Điểm xoay và phóng to. 0,0 = tâm khối · -100% = mép trái/trên · +100% = mép phải/dưới. Gõ số lớn hơn (tới ±500) để đặt trục ngoài khối. Kéo chấm đỏ trong khung xem trước cũng được.'));
+  add(row('Hitbox đổi theo phóng to', checkbox(ta.hitScale !== false, v => ta.hitScale = v)));
+  add(row('Hitbox xoay theo khối', checkbox(ta.hitRot !== false, v => ta.hitRot = v)));
   add(sectionHeader('Các bước animation (' + ta.steps.length + ')'));
-  const sc = RT.techSchedule(ta);
+  const sc = RT.techSchedule(ta, taUI.item);
   ta.steps.forEach((st, i) => {
     const c = el('div'); c.style.cssText = 'border:1px solid ' + (taUI.sel === st.id ? '#e0a030' : '#2e3648') + ';padding:6px;margin-bottom:4px;cursor:pointer;';
     c.textContent = (i + 1) + '. ' + st.name + ' · bắt đầu ' + sc.S[st.id].toFixed(2) + 's · dài ' + st.dur + 's';
@@ -5043,18 +5277,30 @@ function taRender() {
   add(sectionHeader('Biến / Hành động theo bước'));
   ta.rules.forEach((r, i) => {
     const c = el('div'); c.style.cssText = 'border:1px solid #2e3648;padding:6px;margin-bottom:6px;';
-    c.appendChild(row('Khi bước', selectInput(r.step, ta.steps.map(x => [x.id, x.name]), v => { r.step = v; taRefreshAll(); })));
+    const aName = (x) => { const a = TA_ACTIONS.find(y => y[0] === x.action); return a ? a[1] : x.action; };
+    const srcOpts = ta.steps.map(x => ['step:' + x.id, 'Bước: ' + x.name]).concat(ta.rules.filter(x => x !== r).map(x => ['rule:' + x.id, 'Hành động #' + (ta.rules.indexOf(x) + 1) + ': ' + aName(x)]));
+    const cur = (r.after && r.after.kind === 'rule') ? 'rule:' + r.after.ref : 'step:' + r.step;
+    c.appendChild(el('div', 'ev-hint', 'Hành động #' + (i + 1) + ': ' + aName(r)));
+    c.appendChild(row('Gắn vào', selectInput(cur, srcOpts, v => { if (v.indexOf('rule:') === 0) r.after = { kind: 'rule', ref: v.slice(5) }; else { r.after = null; r.step = v.slice(5); } taRender(); })));
     c.appendChild(row('Thời điểm', selectInput(r.when, [['end', 'KẾT THÚC'], ['start', 'BẮT ĐẦU']], v => { r.when = v; taRefreshAll(); })));
     c.appendChild(row('Sau thêm (giây)', numInput(r.delay, v => { r.delay = Math.max(0, v); taRefreshAll(); }, 0.1, 0)));
     c.appendChild(row('Thì', selectInput(r.action, TA_ACTIONS, v => { r.action = v; r.params = {}; taRender(); })));
     taRuleParams(r, ta, it, c);
-    const dl = el('button', 'btn-mini danger', 'Xoá hành động'); dl.onclick = () => { ta.rules.splice(i, 1); taRender(); scheduleSave(); };
+    const dl = el('button', 'btn-mini danger', 'Xoá hành động');
+    dl.onclick = () => { const first = ta.steps[0] ? ta.steps[0].id : ''; ta.rules.forEach(x => { if (x.after && x.after.ref === r.id) { x.after = null; x.step = r.step || first; } }); ta.rules.splice(i, 1); taRender(); scheduleSave(); };
     c.appendChild(dl); add(c);
   });
   const addR = el('button', 'btn full', '＋ Thêm hành động');
-  addR.onclick = () => { if (!ta.steps.length) { toast('Hãy tạo ít nhất 1 bước trước', 'err'); return; } ta.rules.push({ id: 'r' + Date.now().toString(36), step: (taStep(taUI.sel) || ta.steps[0]).id, when: 'end', delay: 0, action: 'shake', params: { level: 5, dur: 0.5 } }); taRender(); scheduleSave(); };
+  addR.onclick = () => { if (!ta.steps.length) { toast('Hãy tạo ít nhất 1 bước trước', 'err'); return; } ta.rules.push({ id: 'r' + Date.now().toString(36), after: null, step: (taStep(taUI.sel) || ta.steps[0]).id, when: 'end', delay: 0, action: 'shake', params: { level: 5, dur: 0.5 } }); taRender(); scheduleSave(); };
   add(addR);
   const inf = el('div', 'ev-hint'); inf.id = 'taInfo'; add(inf); taInfo(inf);
+  add(sectionHeader('Sao chép chuỗi animation sang khối khác'));
+  const jb = el('div'); jb.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;margin:4px 0;';
+  const b1 = el('button', 'btn accent', 'Xuất chuỗi (JSON)'), b2 = el('button', 'btn', 'Dán chuỗi từ bộ nhớ tạm');
+  b1.onclick = taExportJson; b2.onclick = taImportJson; jb.appendChild(b1); jb.appendChild(b2); add(jb);
+  const jt = document.createElement('textarea'); jt.id = 'taJsonBox'; jt.rows = 4;
+  jt.placeholder = 'JSON của chuỗi hiện ở đây. Nếu trình duyệt chặn bộ nhớ tạm, dán JSON vào ô này rồi bấm "Dán chuỗi".';
+  jt.style.cssText = 'width:100%;box-sizing:border-box;font-size:11px;'; add(jt);
   const sk = document.getElementById('taSeek'); if (sk) sk.value = String(Math.round(Math.min(1, taUI.t / taTotal()) * 1000));
   taDraw();
 }
@@ -5152,6 +5398,10 @@ function openProjectsModal() {
   rb.appendChild(row('Độ phân giải', selectInput(String(State.res.scale), [['1', '640x360 (1x)'], ['2', '1280x720 (2x)'], ['3', '1920x1080 (3x)'], ['4', '2560x1440 (4x)']], v => { State.res.scale = +v; scheduleSave(); })));
   rb.appendChild(row('Pixel art (không làm mịn ảnh)', checkbox(!!State.res.pixel, v => { State.res.pixel = v; scheduleSave(); })));
   rb.appendChild(row('Animation lật nhân vật khi đổi hướng', checkbox(!!State.opts.turnAnim, v => { State.opts.turnAnim = v; scheduleSave(); })));
+  rb.appendChild(row('Vật lý cố định 60Hz (khuyến nghị)', checkbox(State.opts.fixedStep !== false, v => { State.opts.fixedStep = v; scheduleSave(); })));
+  rb.appendChild(el('div', 'ev-hint', 'Bật: nhảy, đạn, animation chạy đúng tốc độ như nhau trên máy yếu lẫn máy mạnh. Tắt = cách cũ (phụ thuộc FPS của máy).'));
+  rb.appendChild(row('Giảm hiệu ứng (máy yếu)', checkbox(!!State.opts.lowFx, v => { State.opts.lowFx = v; scheduleSave(); })));
+  rb.appendChild(row('Hiện bộ đếm FPS', checkbox(!!State.opts.showFps, v => { State.opts.showFps = v; scheduleSave(); })));
   const mb = el('button', 'btn accent full', 'Nhạc nền (' + State.music.tracks.length + ')');
   mb.style.marginTop = '6px';
   mb.onclick = () => { modal.classList.remove('show'); openBgmModal(); };
@@ -5436,35 +5686,38 @@ const Exporter = (function () {
     L.push('var lastT = 0;');
     L.push('function loop(t){ try {');
     L.push('  if (!lastT) lastT = t;');
-    L.push('  var dt = (t-lastT)/1000; lastT = t;');
-    L.push('  if (dt > 0.05) dt = 0.05; if (dt < 0) dt = 0;');
-    L.push('  if (!state.showMenu) {');
-    L.push('    state.time += dt;');
-    L.push('    RT.updateTechAnims(state, dt);');
-    L.push('    if (customControl) { try { customControl(state, state.keys, dt, RT, VW, VH); } catch(e){} }');
-    L.push('    for (var i=0;i<state.items.length;i++){');
-    L.push('      var it = state.items[i];');
-    L.push('      if (it.kind === "sprite") RT.updateItem(state, it, dt, state.keys);');
-    L.push('      else if (it.kind === "block") RT.updateBlock(it, dt);');
+    L.push('  var raw = (t-lastT)/1000; lastT = t; if (raw < 0) raw = 0;');
+    L.push('  RT.runFixed(state, raw, function(dt){');
+    L.push('    RT.snapshotPrev(state);');
+    L.push('    if (!state.showMenu) {');
+    L.push('      state.time += dt;');
+    L.push('      RT.updateTechAnims(state, dt);');
+    L.push('      if (customControl) { try { customControl(state, state.keys, dt, RT, VW, VH); } catch(e){} }');
+    L.push('      for (var i=0;i<state.items.length;i++){');
+    L.push('        var it = state.items[i];');
+    L.push('        if (it.kind === "sprite") RT.updateItem(state, it, dt, state.keys);');
+    L.push('        else if (it.kind === "block") RT.updateBlock(it, dt);');
+    L.push('      }');
+    L.push('      RT.updateProjectiles(state, dt);');
+    L.push('      RT.updateParticles(state, dt);');
+    L.push('      RT.updateFloatingTexts(state, dt);');
+    L.push('      RT.updateShake(state, dt);');
+    L.push('      RT.updateCamera(state, dt);');
+    L.push('    } else {');
+    L.push('      for (var i2=0;i2<state.items.length;i2++){');
+    L.push('        var it2 = state.items[i2];');
+    L.push('        if (it2.kind === "sprite") RT.updateItem(state, it2, dt, {});');
+    L.push('        else if (it2.kind === "block") RT.updateBlock(it2, dt);');
+    L.push('      }');
+    L.push('      RT.updateParticles(state, dt);');
+    L.push('      RT.updateFloatingTexts(state, dt);');
+    L.push('      RT.updateShake(state, dt);');
     L.push('    }');
-    L.push('    RT.updateProjectiles(state, dt);');
-    L.push('    RT.updateParticles(state, dt);');
-    L.push('    RT.updateFloatingTexts(state, dt);');
-    L.push('    RT.updateShake(state, dt);');
-    L.push('    RT.updateCamera(state, dt);');
-    L.push('  } else {');
-    L.push('    for (var i2=0;i2<state.items.length;i2++){');
-    L.push('      var it2 = state.items[i2];');
-    L.push('      if (it2.kind === "sprite") RT.updateItem(state, it2, dt, {});');
-    L.push('      else if (it2.kind === "block") RT.updateBlock(it2, dt);');
-    L.push('    }');
-    L.push('    RT.updateParticles(state, dt);');
-    L.push('    RT.updateFloatingTexts(state, dt);');
-    L.push('    RT.updateShake(state, dt);');
-    L.push('  }');
-    L.push('  RT.updateBGM(state, dt);');
+    L.push('  });');
+    L.push('  RT.updateBGM(state, raw);');
     L.push('  ctx.setTransform(RES,0,0,RES,0,0); ctx.imageSmoothingEnabled = !(data.res && data.res.pixel);');
-    L.push('  RT.render(ctx, state, { editor: false });');
+    L.push('  RT.renderInterp(ctx, state, { editor: false }, state._alpha);');
+    L.push('  if (state.opts && state.opts.showFps) RT.drawFps(ctx, state, raw);');
     L.push('  } catch(e){ if(!loop.err){ loop.err=1; console.error(e); } }');
     L.push('  requestAnimationFrame(loop);');
     L.push('}');
@@ -5812,7 +6065,7 @@ async function init() {
   await loadProject(meta);
   updateCamInfo();
   requestAnimationFrame(loop);
-  toast('MNHR-engine Alpha 9.0.1 · lưu trữ: ' + Store.name(), 'ok', 2800);
+  toast('MNHR-engine Alpha 9.5.0 · lưu trữ: ' + Store.name(), 'ok', 2800);
 }
 
 return {
