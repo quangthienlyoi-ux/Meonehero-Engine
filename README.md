@@ -45,3 +45,6 @@
 
 ---
 [Copyright 2026 (c) Meonehero]
+
+<img width="1344" height="621" alt="image" src="https://github.com/user-attachments/assets/1e3984ad-3574-4696-9757-bd1f094813a2" />
+
