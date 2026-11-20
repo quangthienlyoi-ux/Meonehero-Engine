@@ -1,4 +1,6 @@
-# MNHR-engine
+# MNHR-Engine
+<img width="2160" height="2160" alt="image" src="https://github.com/user-attachments/assets/011c6864-fa80-45b4-aecc-d45b546f75c0" />
+
 ## TỔNG QUAN (3/10/2026)
 - Đây là một dự án Mã Nguồn Mở để tạo một công cụ (tools) engine (Low Code) giúp làm Game 2D (Game RPG và 2.5D trong tương lai).
 ---
@@ -6,6 +8,9 @@
 - Có sẵn các tính năng cơ bản của một Engine 2D Đơn Giản.
 - Project ban đầu tên là MiniEngine — Hiện tại là MNHR-engine Hoặc Meonehero Engine.
 - Lưu Ý: Bản phát hành hiện tại là bản Alpha - Chưa phải chính thức.
+
+# Preview:
+
 
 # Logs:
 
@@ -44,7 +49,5 @@
 - (Click 3 lần vào "MNHR-Engine".)
 
 ---
-[Copyright 2026 (c) Meonehero]
 
-<img width="1344" height="621" alt="image" src="https://github.com/user-attachments/assets/1e3984ad-3574-4696-9757-bd1f094813a2" />
 
