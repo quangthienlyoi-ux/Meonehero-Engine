@@ -41,6 +41,8 @@
 
 - Logs Alpha 9.0.1 [PATCH UPDATE] (14/11/2026)
 
+- Logs Alpha 9.5.0 (20/11/2026)
+
 - BETA X.X (XX/XX/2026) ?
 
 ---
