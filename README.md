@@ -1,5 +1,5 @@
-# MNHR-Engine
-<img width="400" height="400" alt="image" src="https://github.com/user-attachments/assets/011c6864-fa80-45b4-aecc-d45b546f75c0" />
+# MNHR-Engine 
+<img width="100" height="100" alt="image" src="https://github.com/user-attachments/assets/011c6864-fa80-45b4-aecc-d45b546f75c0" />
 
 ## TỔNG QUAN (3/10/2026)
 - Đây là một dự án Mã Nguồn Mở để tạo một công cụ (tools) engine (Low Code) giúp làm Game 2D (Game RPG và 2.5D trong tương lai).
