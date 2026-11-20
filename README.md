@@ -10,6 +10,13 @@
 - Lưu Ý: Bản phát hành hiện tại là bản Alpha - Chưa phải chính thức.
 
 # Preview:
+<img width="1344" height="621" alt="image" src="https://github.com/user-attachments/assets/98a28d8c-9035-421f-ad20-0ad9eb09a21b" />
+
+<img width="1344" height="621" alt="image" src="https://github.com/user-attachments/assets/e8dfc224-d845-4b9e-9a2c-05828261c200" />
+
+<img width="1344" height="621" alt="image" src="https://github.com/user-attachments/assets/145f32d6-61e5-444e-a989-e863fb327be7" />
+
+
 
 
 # Logs:
